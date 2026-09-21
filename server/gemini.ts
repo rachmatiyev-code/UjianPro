@@ -2,14 +2,60 @@ import { GoogleGenAI } from '@google/genai';
 import type { Question, SOLOLevel, EducationLevel } from '../src/types.js';
 
 let aiClient: GoogleGenAI | null = null;
+let customApiKey: string | null = null;
+
+export function setGeminiApiKey(apiKey: string): { success: boolean; message: string } {
+  const trimmed = apiKey.trim();
+  if (!trimmed) {
+    customApiKey = null;
+    aiClient = null;
+    return { success: true, message: 'Gemini API Key direset.' };
+  }
+  customApiKey = trimmed;
+  process.env.GEMINI_API_KEY = trimmed;
+  aiClient = new GoogleGenAI({
+    apiKey: trimmed,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      },
+    },
+  });
+  return { success: true, message: 'Gemini AI API Key berhasil diaktifkan untuk model gemini-3.8-flash!' };
+}
+
+export function getGeminiApiStatus(): {
+  configured: boolean;
+  model: string;
+  maskedKey: string | null;
+} {
+  const currentKey = customApiKey || process.env.GEMINI_API_KEY;
+  if (!currentKey) {
+    return {
+      configured: false,
+      model: 'gemini-3.8-flash',
+      maskedKey: null,
+    };
+  }
+  const maskedKey = currentKey.length > 8
+    ? `${currentKey.substring(0, 6)}...${currentKey.substring(currentKey.length - 4)}`
+    : '***';
+
+  return {
+    configured: true,
+    model: 'gemini-3.8-flash',
+    maskedKey,
+  };
+}
 
 function getAiClient(): GoogleGenAI | null {
-  if (!process.env.GEMINI_API_KEY) {
+  const key = customApiKey || process.env.GEMINI_API_KEY;
+  if (!key) {
     return null;
   }
   if (!aiClient) {
     aiClient = new GoogleGenAI({
-      apiKey: process.env.GEMINI_API_KEY,
+      apiKey: key,
       httpOptions: {
         headers: {
           'User-Agent': 'aistudio-build',
@@ -28,12 +74,14 @@ export async function generateQuestionWithAI(params: {
   soloLevel: SOLOLevel;
   type: 'pilihan_ganda' | 'uraian' | 'pilihan_ganda_kompleks';
   count?: number;
+  customPrompt?: string;
 }): Promise<Partial<Question>[]> {
   const ai = getAiClient();
   const count = params.count || 1;
 
   if (!ai) {
     // High-fidelity fallback question if key is absent
+    const promptNote = params.customPrompt ? ` (Sesuai instruksi khusus: "${params.customPrompt}")` : '';
     return [
       {
         code: `SOAL-${Math.floor(100 + Math.random() * 900)}`,
@@ -42,7 +90,7 @@ export async function generateQuestionWithAI(params: {
         subject: params.subject,
         topic: params.topic,
         type: params.type,
-        questionText: `[Template Soal ${params.subject} - Level ${params.level}] Berdasarkan materi tentang ${params.topic}, analisislah hubungan antara konsep dasar dan penerapannya dalam kehidupan nyata sesuai taksonomi SOLO level ${params.soloLevel}.`,
+        questionText: `[Template Soal ${params.subject} - Level ${params.level}] Berdasarkan materi tentang ${params.topic}${promptNote}, analisislah hubungan antara konsep dasar dan penerapannya dalam kehidupan nyata sesuai taksonomi SOLO level ${params.soloLevel}.`,
         soloLevel: params.soloLevel,
         bloomLevel: 'C4',
         weight: 10,
@@ -56,10 +104,14 @@ export async function generateQuestionWithAI(params: {
               ]
             : undefined,
         correctAnswer: params.type !== 'uraian' ? 'opt_a' : 'Jawaban harus menguraikan relasi sebab-akibat yang logis.',
-        explanation: `Soal ini menguji pemahaman tingkat ${params.soloLevel} pada topik ${params.topic}.`,
+        explanation: `Soal ini menguji pemahaman tingkat ${params.soloLevel} pada topik ${params.topic}.${promptNote}`,
       },
     ];
   }
+
+  const customInstruction = params.customPrompt
+    ? `\n- INSTRUKSI KHUSUS / KUSTOM PROMPT DARI GURU:\n  "${params.customPrompt}"\n  (PENTING: Wajib penuhi seluruh kriteria, stimulus cerita/data, konteks, dan arah pertanyaan dari instruksi khusus ini!)`
+    : '';
 
   const prompt = `Anda adalah pakar penyusun soal standar nasional Indonesia (Asesmen Nasional / AKM / Kurikulum Merdeka).
 Buat ${count} butir soal dengan spesifikasi:
@@ -68,7 +120,7 @@ Buat ${count} butir soal dengan spesifikasi:
 - Topik / Materi: ${params.topic}
 - Tipe Soal: ${params.type} (pilihan_ganda / uraian / pilihan_ganda_kompleks)
 - Sintaks Taksonomi SOLO: ${params.soloLevel}
-  (Catatan SOLO: Prestructural = belum paham/meleset, Unistructural = satu aspek sederhana, Multistructural = beberapa aspek terpisah, Relational = memadukan aspek menjadi kesatuan terintegrasi, Extended Abstract = menggeneralisasi konsep ke situasi baru/abstrak)
+  (Catatan SOLO: Prestructural = belum paham/meleset, Unistructural = satu aspek sederhana, Multistructural = beberapa aspek terpisah, Relational = memadukan aspek menjadi kesatuan terintegrasi, Extended Abstract = menggeneralisasi konsep ke situasi baru/abstrak)${customInstruction}
 
 KEMBALIKAN HANYA JSON VALID berupa array objek dengan struktur:
 [

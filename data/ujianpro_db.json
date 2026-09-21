@@ -1,0 +1,510 @@
+{
+  "questions": [
+    {
+      "id": "q_dummy_1",
+      "code": "FIS-SMA-01",
+      "level": "SMA",
+      "grade": "Kelas 12",
+      "subject": "Fisika",
+      "topic": "Hukum Termodinamika & Efisiensi Mesin Carnot",
+      "type": "pilihan_ganda",
+      "questionText": "Sebuah mesin Carnot beroperasi di antara dua reservoir bersuhu 800 K dan 400 K. Jika mesin tersebut menyerap kalor sebesar 1.200 Joule dari reservoir suhu tinggi dalam satu siklus, berapakah usaha yang dihasilkan oleh mesin Carnot tersebut?",
+      "imageUrl": "https://images.unsplash.com/photo-1636466497217-26a8cbeaf0aa?w=600&auto=format&fit=crop&q=80",
+      "options": [
+        {
+          "id": "opt_a",
+          "text": "300 Joule"
+        },
+        {
+          "id": "opt_b",
+          "text": "600 Joule"
+        },
+        {
+          "id": "opt_c",
+          "text": "800 Joule"
+        },
+        {
+          "id": "opt_d",
+          "text": "900 Joule"
+        },
+        {
+          "id": "opt_e",
+          "text": "1.000 Joule"
+        }
+      ],
+      "correctAnswer": "opt_b",
+      "explanation": "Efisiensi η = 1 - (T2/T1) = 1 - (400/800) = 50%. Usaha W = η × Q1 = 0,5 × 1200 J = 600 Joule.",
+      "soloLevel": "Relational",
+      "bloomLevel": "C4",
+      "weight": 10,
+      "isDummy": true,
+      "createdAt": "2026-09-01T08:00:00.000Z",
+      "updatedAt": "2026-09-01T08:00:00.000Z"
+    },
+    {
+      "id": "q_dummy_2",
+      "code": "BIO-SMP-02",
+      "level": "SMP",
+      "grade": "Kelas 9",
+      "subject": "Ilmu Pengetahuan Alam (IPA)",
+      "topic": "Sistem Peredaran Darah Manusia",
+      "type": "pilihan_ganda",
+      "questionText": "Perhatikan bagian jantung manusia. Bagian bilik kiri (ventrikel sinister) memiliki dinding otot yang paling tebal dibandingkan ruang jantung lainnya. Alasan fisiologis yang paling tepat untuk adaptasi struktural ini adalah:",
+      "options": [
+        {
+          "id": "opt_a",
+          "text": "Menerima darah kaya karbondioksida dari seluruh jaringan tubuh"
+        },
+        {
+          "id": "opt_b",
+          "text": "Memompa darah bertekanan tinggi ke seluruh tubuh melalui aorta"
+        },
+        {
+          "id": "opt_c",
+          "text": "Mencegah terjadinya pencampuran darah bersih dan darah kotor"
+        },
+        {
+          "id": "opt_d",
+          "text": "Mengalirkan darah langsung ke paru-paru untuk pertukaran gas"
+        }
+      ],
+      "correctAnswer": "opt_b",
+      "explanation": "Bilik kiri memompa darah ke seluruh tubuh melewati sirkulasi sistemik sehingga membutuhkan kontraksi otot miokardium yang paling kuat dan tebal.",
+      "soloLevel": "Multistructural",
+      "bloomLevel": "C3",
+      "weight": 10,
+      "isDummy": true,
+      "createdAt": "2026-09-02T08:00:00.000Z",
+      "updatedAt": "2026-09-02T08:00:00.000Z"
+    },
+    {
+      "id": "q_dummy_3",
+      "code": "MAT-SD-03",
+      "level": "SD",
+      "grade": "Kelas 6",
+      "subject": "Matematika",
+      "topic": "Operasi Hitung Pecahan dan Desimal",
+      "type": "pilihan_ganda",
+      "questionText": "Ibu membeli 3 1/2 kg tepung terigu. Digunakan untuk membuat kue bolu sebanyak 1,75 kg dan donat sebanyak 0,8 kg. Berapa sisa tepung terigu yang dimiliki Ibu sekarang?",
+      "options": [
+        {
+          "id": "opt_a",
+          "text": "0,95 kg"
+        },
+        {
+          "id": "opt_b",
+          "text": "1,05 kg"
+        },
+        {
+          "id": "opt_c",
+          "text": "1,25 kg"
+        },
+        {
+          "id": "opt_d",
+          "text": "0,85 kg"
+        }
+      ],
+      "correctAnswer": "opt_a",
+      "explanation": "3,5 kg - 1,75 kg - 0,8 kg = 1,75 kg - 0,8 kg = 0,95 kg.",
+      "soloLevel": "Unistructural",
+      "bloomLevel": "C2",
+      "weight": 10,
+      "isDummy": true,
+      "createdAt": "2026-09-03T08:00:00.000Z",
+      "updatedAt": "2026-09-03T08:00:00.000Z"
+    },
+    {
+      "id": "q_dummy_4",
+      "code": "KIM-SMA-04",
+      "level": "SMA",
+      "grade": "Kelas 12",
+      "subject": "Kimia",
+      "topic": "Kesetimbangan Kimia & Pergeseran Le Chatelier",
+      "type": "uraian",
+      "questionText": "Reaksi pembentukan gas amonia: N2(g) + 3H2(g) <=> 2NH3(g) dengan delta H = -92 kJ. Jelaskan secara komprehensif apa yang terjadi terhadap konsentrasi amonia jika volume wadah diperkecil dan suhu sistem dinaikkan, serta hubungkan dengan prinsip Le Chatelier!",
+      "correctAnswer": "Volume diperkecil menggeser reaksi ke kanan (koefisien kecil). Suhu dinaikkan menggeser reaksi endoterm ke kiri. Analisis gabungan diperlukan.",
+      "explanation": "Soal level Extended Abstract yang menuntut siswa mengintegrasikan dua variabel berbeda (tekanan/volume dan suhu) serta dampaknya pada kesetimbangan dinamis.",
+      "soloLevel": "Extended Abstract",
+      "bloomLevel": "C5",
+      "weight": 20,
+      "isDummy": true,
+      "createdAt": "2026-09-04T08:00:00.000Z",
+      "updatedAt": "2026-09-04T08:00:00.000Z"
+    },
+    {
+      "id": "q_real_1",
+      "code": "BIO-SMA-R01",
+      "level": "SMA",
+      "grade": "Kelas 11",
+      "subject": "Biologi",
+      "topic": "Struktur Sel & Transpor Membran",
+      "type": "pilihan_ganda",
+      "questionText": "Jika sel darah merah (eritrosit) ditempatkan ke dalam larutan garam dengan konsentrasi NaCl 0,1% (larutan hipotonik), peristiwa fisiologis yang akan terjadi pada sel darah merah tersebut adalah:",
+      "options": [
+        {
+          "id": "opt_a",
+          "text": "Krenasi karena air dari dalam sel keluar ke lingkungan"
+        },
+        {
+          "id": "opt_b",
+          "text": "Hemolisis karena air berosmosis masuk hingga membran sel pecah"
+        },
+        {
+          "id": "opt_c",
+          "text": "Plasmolisis akibat lepasnya membran sel dari dinding sel"
+        },
+        {
+          "id": "opt_d",
+          "text": "Tetap normal karena adanya pompa natrium-kalium aktif"
+        }
+      ],
+      "correctAnswer": "opt_b",
+      "explanation": "Larutan 0,1% NaCl bersifat hipotonik terhadap sitoplasma eritrosit (0,9%), menyebabkan air masuk secara masif hingga eritrosit mengalami hemolisis (lisis).",
+      "soloLevel": "Relational",
+      "bloomLevel": "C4",
+      "weight": 10,
+      "isDummy": false,
+      "createdAt": "2026-09-10T09:00:00.000Z",
+      "updatedAt": "2026-09-10T09:00:00.000Z"
+    },
+    {
+      "id": "q_real_2",
+      "code": "MAT-SMA-R02",
+      "level": "SMA",
+      "grade": "Kelas 12",
+      "subject": "Matematika",
+      "topic": "Kalkulus Integral & Aplikasi Luas Daerah",
+      "type": "pilihan_ganda",
+      "questionText": "Luas daerah yang dibatasi oleh kurva parabola y = 4 - x^2 dan garis y = 0 (sumbu X) adalah:",
+      "options": [
+        {
+          "id": "opt_a",
+          "text": "16/3 satuan luas"
+        },
+        {
+          "id": "opt_b",
+          "text": "32/3 satuan luas"
+        },
+        {
+          "id": "opt_c",
+          "text": "8 satuan luas"
+        },
+        {
+          "id": "opt_d",
+          "text": "12 satuan luas"
+        }
+      ],
+      "correctAnswer": "opt_b",
+      "explanation": "Titik potong x = -2 sampai 2. Integral [-2 ke 2] (4 - x^2) dx = [4x - x^3/3] = (8 - 8/3) - (-8 + 8/3) = 16/3 + 16/3 = 32/3 satuan luas.",
+      "soloLevel": "Multistructural",
+      "bloomLevel": "C3",
+      "weight": 10,
+      "isDummy": false,
+      "createdAt": "2026-09-11T09:00:00.000Z",
+      "updatedAt": "2026-09-11T09:00:00.000Z"
+    }
+  ],
+  "exams": [
+    {
+      "id": "ex_dummy_1",
+      "title": "Penilaian Tengah Semester (PTS) Fisika Terpadu",
+      "subject": "Fisika",
+      "level": "SMA",
+      "grade": "Kelas 12",
+      "durationMinutes": 60,
+      "passingScore": 75,
+      "token": "FIS12A",
+      "tokenExpiresAt": "2026-09-24T00:57:17.137Z",
+      "questionIds": [
+        "q_dummy_1",
+        "q_dummy_4"
+      ],
+      "isPublished": true,
+      "isDummy": true,
+      "createdAt": "2026-09-05T00:00:00.000Z"
+    },
+    {
+      "id": "ex_dummy_2",
+      "title": "Simulasi AKM & Asesmen SOLO IPA Terpadu",
+      "subject": "Ilmu Pengetahuan Alam (IPA)",
+      "level": "SMP",
+      "grade": "Kelas 9",
+      "durationMinutes": 45,
+      "passingScore": 70,
+      "token": "IPA09B",
+      "tokenExpiresAt": "2026-09-23T00:57:17.138Z",
+      "questionIds": [
+        "q_dummy_2"
+      ],
+      "isPublished": true,
+      "isDummy": true,
+      "createdAt": "2026-09-06T00:00:00.000Z"
+    },
+    {
+      "id": "ex_real_1",
+      "title": "Ujian Akhir Semester (UAS) Biologi Sel & Terapan",
+      "subject": "Biologi",
+      "level": "SMA",
+      "grade": "Kelas 11",
+      "durationMinutes": 90,
+      "passingScore": 78,
+      "token": "BIO11X",
+      "tokenExpiresAt": "2026-09-26T00:57:17.138Z",
+      "questionIds": [
+        "q_real_1"
+      ],
+      "isPublished": true,
+      "isDummy": false,
+      "createdAt": "2026-09-12T00:00:00.000Z"
+    }
+  ],
+  "students": [
+    {
+      "id": "std_1789962635238_hzd9",
+      "nisn": "009999901",
+      "name": "Budi Santoso",
+      "grade": "Kelas 12",
+      "className": "XII MIPA 1",
+      "parentName": "Orang Tua",
+      "parentPhone": "+62812345678",
+      "parentEmail": "wali@gmail.com",
+      "isDummy": true,
+      "createdAt": "2026-09-21T03:50:35.238Z"
+    },
+    {
+      "id": "std_dummy_1",
+      "nisn": "0071234501",
+      "name": "Ahmad Fadhil Prasetyo",
+      "grade": "Kelas 12",
+      "className": "XII MIPA 1",
+      "parentName": "Ir. Hendra Prasetyo",
+      "parentPhone": "+6281234567801",
+      "parentEmail": "hendra.prasetyo@gmail.com",
+      "isDummy": true,
+      "createdAt": "2026-08-15T00:00:00.000Z"
+    },
+    {
+      "id": "std_dummy_2",
+      "nisn": "0071234502",
+      "name": "Siti Nurhaliza Putri",
+      "grade": "Kelas 12",
+      "className": "XII MIPA 1",
+      "parentName": "Hj. Dewi Rahayu",
+      "parentPhone": "+6281234567802",
+      "parentEmail": "dewi.rahayu@gmail.com",
+      "isDummy": true,
+      "createdAt": "2026-08-15T00:00:00.000Z"
+    },
+    {
+      "id": "std_dummy_3",
+      "nisn": "0071234503",
+      "name": "Reza Ananda Pratama",
+      "grade": "Kelas 12",
+      "className": "XII MIPA 2",
+      "parentName": "Drs. Supriyanto",
+      "parentPhone": "+6281234567803",
+      "parentEmail": "supriyanto@gmail.com",
+      "isDummy": true,
+      "createdAt": "2026-08-15T00:00:00.000Z"
+    },
+    {
+      "id": "std_dummy_4",
+      "nisn": "0071234504",
+      "name": "Clara Michelle Wijaya",
+      "grade": "Kelas 12",
+      "className": "XII MIPA 2",
+      "parentName": "Budi Wijaya",
+      "parentPhone": "+6281234567804",
+      "parentEmail": "budi.wijaya@gmail.com",
+      "isDummy": true,
+      "createdAt": "2026-08-15T00:00:00.000Z"
+    },
+    {
+      "id": "std_real_1",
+      "nisn": "0089876541",
+      "name": "Bintang Pratama Yudha",
+      "grade": "Kelas 11",
+      "className": "XI IPA Unggulan",
+      "parentName": "Agus Yudha M.Sc",
+      "parentPhone": "+6281399887766",
+      "parentEmail": "agus.yudha@corporate.id",
+      "isDummy": false,
+      "createdAt": "2026-09-01T00:00:00.000Z"
+    },
+    {
+      "id": "std_real_2",
+      "nisn": "0089876542",
+      "name": "Annisa Dwi Larasati",
+      "grade": "Kelas 11",
+      "className": "XI IPA Unggulan",
+      "parentName": "Dra. Endang Lestari",
+      "parentPhone": "+6281311223344",
+      "parentEmail": "endang.lestari@gmail.com",
+      "isDummy": false,
+      "createdAt": "2026-09-01T00:00:00.000Z"
+    }
+  ],
+  "results": [
+    {
+      "id": "res_dummy_1",
+      "sessionId": "sess_dm_1",
+      "examId": "ex_dummy_1",
+      "examTitle": "Penilaian Tengah Semester (PTS) Fisika Terpadu",
+      "studentId": "std_dummy_1",
+      "studentName": "Ahmad Fadhil Prasetyo",
+      "nisn": "0071234501",
+      "className": "XII MIPA 1",
+      "subject": "Fisika",
+      "totalQuestions": 2,
+      "correctCount": 2,
+      "score": 95,
+      "passed": true,
+      "soloPerformance": {
+        "Prestructural": {
+          "total": 0,
+          "correct": 0,
+          "percentage": 100
+        },
+        "Unistructural": {
+          "total": 0,
+          "correct": 0,
+          "percentage": 100
+        },
+        "Multistructural": {
+          "total": 0,
+          "correct": 0,
+          "percentage": 100
+        },
+        "Relational": {
+          "total": 1,
+          "correct": 1,
+          "percentage": 100
+        },
+        "Extended Abstract": {
+          "total": 1,
+          "correct": 1,
+          "percentage": 90
+        }
+      },
+      "cheatScore": 0,
+      "totalViolations": 0,
+      "completedAt": "2026-09-08T10:30:00.000Z",
+      "isDummy": true
+    },
+    {
+      "id": "res_dummy_2",
+      "sessionId": "sess_dm_2",
+      "examId": "ex_dummy_1",
+      "examTitle": "Penilaian Tengah Semester (PTS) Fisika Terpadu",
+      "studentId": "std_dummy_3",
+      "studentName": "Reza Ananda Pratama",
+      "nisn": "0071234503",
+      "className": "XII MIPA 2",
+      "subject": "Fisika",
+      "totalQuestions": 2,
+      "correctCount": 1,
+      "score": 65,
+      "passed": false,
+      "soloPerformance": {
+        "Prestructural": {
+          "total": 0,
+          "correct": 0,
+          "percentage": 100
+        },
+        "Unistructural": {
+          "total": 0,
+          "correct": 0,
+          "percentage": 100
+        },
+        "Multistructural": {
+          "total": 0,
+          "correct": 0,
+          "percentage": 100
+        },
+        "Relational": {
+          "total": 1,
+          "correct": 1,
+          "percentage": 100
+        },
+        "Extended Abstract": {
+          "total": 1,
+          "correct": 0,
+          "percentage": 30
+        }
+      },
+      "cheatScore": 35,
+      "totalViolations": 3,
+      "completedAt": "2026-09-08T11:00:00.000Z",
+      "isDummy": true
+    }
+  ],
+  "cheatLogs": [
+    {
+      "id": "cl_1",
+      "sessionId": "sess_dm_2",
+      "studentId": "std_dummy_3",
+      "studentName": "Reza Ananda Pratama",
+      "timestamp": "2026-09-08T10:45:12.000Z",
+      "type": "TAB_SWITCH",
+      "description": "Siswa berpindah tab / jendela browser lain selama 14 detik.",
+      "severity": "medium"
+    },
+    {
+      "id": "cl_2",
+      "sessionId": "sess_dm_2",
+      "studentId": "std_dummy_3",
+      "studentName": "Reza Ananda Pratama",
+      "timestamp": "2026-09-08T10:52:05.000Z",
+      "type": "FACE_ABSENT",
+      "description": "AI mendeteksi wajah siswa tidak terlihat di depan kamera webcam.",
+      "severity": "high"
+    }
+  ],
+  "schoolProfile": {
+    "name": "SMA NEGERI 1 NUSANTARA",
+    "dinasHeader": "PEMERINTAH PROVINSI DAERAH KHUSUS IBUKOTA JAKARTA",
+    "subHeader": "DINAS PENDIDIKAN DAN KEBUDAYAAN",
+    "address": "Jl. Merdeka Belajar No. 45, Kebayoran Baru",
+    "city": "Jakarta Selatan",
+    "postalCode": "12110",
+    "phone": "(021) 7890-1234",
+    "email": "info@sman1nusantara.sch.id",
+    "website": "https://sman1nusantara.sch.id",
+    "accreditation": "Akreditasi A (Unggul)",
+    "academicYear": "2026/2027",
+    "headmasterName": "Drs. H. Bambang Suryono, M.Pd.",
+    "headmasterNip": "19750812 199903 1 004",
+    "logoUrl": "https://images.unsplash.com/photo-1546410531-bb4caa6b424d?w=160&auto=format&fit=crop&q=80"
+  },
+  "parentNotifications": [
+    {
+      "id": "notif_1",
+      "studentId": "std_dummy_1",
+      "studentName": "Ahmad Fadhil Prasetyo",
+      "parentName": "Ir. Hendra Prasetyo",
+      "parentPhone": "+6281234567801",
+      "monthYear": "September 2026",
+      "avgScore": 95,
+      "examsCompleted": 1,
+      "cheatIndexSummary": "Sangat Baik (0% Pelanggaran - Disiplin Tinggi)",
+      "status": "sent",
+      "sentVia": "WhatsApp",
+      "sentAt": "2026-09-10T14:00:00.000Z",
+      "messageContent": "Yth. Bapak/Ibu Orang Tua dari Ahmad Fadhil Prasetyo (XII MIPA 1),\nBerikut kami sampaikan laporan perkembangan akademik bulan September 2026 di SMA Negeri 1 Nusantara:\n- Rata-rata Nilai Ujian: 95.0 (Tuntas - Unggul)\n- Integritas Ujian: 100% (Bebas Pelanggaran)\n- Rekomendasi: Diikutsertakan dalam pembinaan Olimpiade Sains Nasional (OSN).\nTerima kasih atas bimbingan di rumah."
+    },
+    {
+      "id": "notif_2",
+      "studentId": "std_dummy_3",
+      "studentName": "Reza Ananda Pratama",
+      "parentName": "Drs. Supriyanto",
+      "parentPhone": "+6281234567803",
+      "monthYear": "September 2026",
+      "avgScore": 65,
+      "examsCompleted": 1,
+      "cheatIndexSummary": "Perlu Perhatian (Terdeteksi 3x Peringatan Sistem)",
+      "status": "draft",
+      "sentVia": "WhatsApp",
+      "messageContent": "Yth. Bapak/Ibu Orang Tua dari Reza Ananda Pratama (XII MIPA 2),\nBerikut laporan perkembangan akademik bulan September 2026 di SMA Negeri 1 Nusantara:\n- Rata-rata Nilai: 65.0 (Perlu Remedial pada materi Fisika Terpadu)\n- Catatan Ujian: Terdeteksi 3 insiden perpindahan tab browser selama ujian.\n- Jadwal Remediasi: Kamis, 24 September 2026.\nMohon dukungan dan pemantauan belajar ananda."
+    }
+  ]
+}

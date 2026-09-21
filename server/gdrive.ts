@@ -23,6 +23,7 @@ export interface GDriveAuthDiagnostics {
   folder: string;
   autoBackupIntervalHours: number;
   deduplicationActive: boolean;
+  lastError?: string | null;
 }
 
 class GoogleDriveBackupService {
@@ -30,6 +31,7 @@ class GoogleDriveBackupService {
   private encryptionSecret = process.env.BACKUP_ENCRYPTION_SECRET || 'ujianpro-secure-aes256-key';
   private backupHistory: BackupRecord[] = [];
   private storedSnapshots = new Map<string, string>(); // checksum -> encryptedPayload
+  private lastAuthError: string | null = null;
 
   // OAuth & Service Account Credentials State
   private clientId = process.env.GOOGLE_CLIENT_ID || '';
@@ -140,42 +142,85 @@ class GoogleDriveBackupService {
       folder: this.folderName,
       autoBackupIntervalHours: this.autoBackupIntervalHours,
       deduplicationActive: true,
+      lastError: this.lastAuthError,
     };
   }
 
-  // Configure or update credentials dynamically
-  public updateCredentials(config: GDriveAuthConfig): GDriveAuthDiagnostics {
-    if (config.folderName) this.folderName = config.folderName;
-    if (config.clientId) this.clientId = config.clientId;
-    if (config.clientSecret) this.clientSecret = config.clientSecret;
-    if (config.refreshToken) this.refreshToken = config.refreshToken;
-    if (config.serviceAccountEmail) this.serviceAccountEmail = config.serviceAccountEmail;
-    if (config.serviceAccountPrivateKey) this.serviceAccountPrivateKey = config.serviceAccountPrivateKey;
+  // Configure or update credentials dynamically with immediate verification
+  public async updateCredentials(config: GDriveAuthConfig): Promise<{
+    success: boolean;
+    message: string;
+    status: GDriveAuthDiagnostics;
+  }> {
+    if (config.folderName) this.folderName = config.folderName.trim();
+    if (config.clientId !== undefined) this.clientId = config.clientId.trim();
+    if (config.clientSecret !== undefined) this.clientSecret = config.clientSecret.trim();
+    if (config.refreshToken !== undefined) this.refreshToken = config.refreshToken.trim();
+    if (config.serviceAccountEmail !== undefined) this.serviceAccountEmail = config.serviceAccountEmail.trim();
+    if (config.serviceAccountPrivateKey !== undefined) this.serviceAccountPrivateKey = config.serviceAccountPrivateKey.trim();
+
     if (config.accessToken) {
-      this.cachedAccessToken = config.accessToken;
+      this.cachedAccessToken = config.accessToken.trim();
       this.tokenExpiresAt = Date.now() + 3600 * 1000;
       this.tokenCreatedAt = Date.now();
+      this.lastAuthError = null;
     }
+
     if (config.serviceAccountKeyJson) {
       try {
         const parsed = JSON.parse(config.serviceAccountKeyJson);
-        if (parsed.client_email) this.serviceAccountEmail = parsed.client_email;
-        if (parsed.private_key) this.serviceAccountPrivateKey = parsed.private_key;
-      } catch (e) {
+        if (parsed.client_email) this.serviceAccountEmail = parsed.client_email.trim();
+        if (parsed.private_key) this.serviceAccountPrivateKey = parsed.private_key.trim();
+        this.lastAuthError = null;
+      } catch (e: any) {
         console.warn('Failed to parse serviceAccountKeyJson:', e);
+        this.lastAuthError = `Format JSON Service Account tidak valid: ${e.message}`;
+        return {
+          success: false,
+          message: `Format JSON Service Account Key tidak valid: ${e.message}`,
+          status: this.getAuthDiagnostics(),
+        };
       }
     }
+
     if (config.autoBackupIntervalHours && config.autoBackupIntervalHours > 0) {
       this.autoBackupIntervalHours = config.autoBackupIntervalHours;
       this.initAutoBackupScheduler();
     }
 
-    return this.getAuthDiagnostics();
+    // Proactively verify credentials if configured
+    const method = this.getAuthMethod();
+    if (method === 'oauth_refresh_token') {
+      const token = await this.refreshOAuthToken();
+      if (!token) {
+        return {
+          success: false,
+          message: this.lastAuthError || 'Gagal menukar Refresh Token ke Google OAuth. Pastikan Client ID, Client Secret, dan Refresh Token valid.',
+          status: this.getAuthDiagnostics(),
+        };
+      }
+    } else if (method === 'service_account') {
+      const token = await this.getServiceAccountAccessToken();
+      if (!token) {
+        return {
+          success: false,
+          message: this.lastAuthError || 'Gagal otentikasi Google Service Account. Pastikan client_email dan private_key RSA valid.',
+          status: this.getAuthDiagnostics(),
+        };
+      }
+    }
+
+    return {
+      success: true,
+      message: 'Kredensial produksi Google Drive berhasil divalidasi dan disimpan.',
+      status: this.getAuthDiagnostics(),
+    };
   }
 
   // Refresh OAuth2 access token automatically using Refresh Token
   private async refreshOAuthToken(): Promise<string | null> {
     if (!this.refreshToken || !this.clientId || !this.clientSecret) {
+      this.lastAuthError = 'Client ID, Client Secret, atau Refresh Token belum lengkap.';
       return null;
     }
 
@@ -196,6 +241,13 @@ class GoogleDriveBackupService {
       if (!response.ok) {
         const errorText = await response.text();
         console.error('[GDrive] Refresh token exchange failed:', response.status, errorText);
+        let parsedMessage = errorText;
+        try {
+          const jsonErr = JSON.parse(errorText);
+          if (jsonErr.error_description) parsedMessage = jsonErr.error_description;
+          else if (jsonErr.error) parsedMessage = jsonErr.error;
+        } catch (_) {}
+        this.lastAuthError = `Google OAuth Error (${response.status}): ${parsedMessage}`;
         return null;
       }
 
@@ -204,10 +256,12 @@ class GoogleDriveBackupService {
       // Subtract 2 minutes buffer before expiry
       this.tokenExpiresAt = Date.now() + (data.expires_in - 120) * 1000;
       this.tokenCreatedAt = Date.now();
+      this.lastAuthError = null;
       console.log('[GDrive] Successfully refreshed OAuth2 access token via Refresh Token.');
       return this.cachedAccessToken;
-    } catch (err) {
+    } catch (err: any) {
       console.error('[GDrive] Network error during OAuth refresh token exchange:', err);
+      this.lastAuthError = `Koneksi ke server Google OAuth gagal: ${err.message}`;
       return null;
     }
   }

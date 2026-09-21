@@ -4,7 +4,7 @@ import { createServer as createViteServer } from 'vite';
 import { dbRepository } from './server/db.js';
 import { redisSessionManager } from './server/redis.js';
 import { googleDriveBackupService } from './server/gdrive.js';
-import { generateQuestionWithAI, gradeEssayWithAI } from './server/gemini.js';
+import { generateQuestionWithAI, gradeEssayWithAI, setGeminiApiKey, getGeminiApiStatus } from './server/gemini.js';
 import type { Question, Exam, Student, ExamResult, SOLOLevel, ExamSession } from './src/types.js';
 
 async function startServer() {
@@ -107,10 +107,31 @@ async function startServer() {
     res.json({ success: true });
   });
 
+  // ==========================================
+  // GEMINI AI CONFIGURATION & STATUS APIS
+  // ==========================================
+  app.get('/api/ai/status', (req, res) => {
+    res.json(getGeminiApiStatus());
+  });
+
+  app.post('/api/ai/config-key', (req, res) => {
+    const { apiKey } = req.body;
+    if (typeof apiKey !== 'string') {
+      return res.status(400).json({ error: 'Field apiKey harus berupa string' });
+    }
+    const result = setGeminiApiKey(apiKey);
+    const status = getGeminiApiStatus();
+    res.json({
+      success: result.success,
+      message: result.message,
+      status,
+    });
+  });
+
   // AI Question Generation with Gemini
   app.post('/api/questions/generate-ai', async (req, res) => {
     try {
-      const { level, grade, subject, topic, soloLevel, type, count } = req.body;
+      const { level, grade, subject, topic, soloLevel, type, count, customPrompt } = req.body;
       const isDummy = req.query.mode === 'dummy';
 
       const generated = await generateQuestionWithAI({
@@ -121,6 +142,7 @@ async function startServer() {
         soloLevel: soloLevel || 'Relational',
         type: type || 'pilihan_ganda',
         count: count || 1,
+        customPrompt: typeof customPrompt === 'string' ? customPrompt.trim() : undefined,
       });
 
       // Save to repository automatically
@@ -621,13 +643,21 @@ async function startServer() {
     res.json(googleDriveBackupService.getAuthDiagnostics());
   });
 
-  app.post('/api/backup/configure-auth', (req, res) => {
-    const updatedStatus = googleDriveBackupService.updateCredentials(req.body);
-    res.json({
-      success: true,
-      message: 'Konfigurasi autentikasi Google Drive berhasil diperbarui.',
-      status: updatedStatus,
-    });
+  app.post('/api/backup/configure-auth', async (req, res) => {
+    try {
+      const result = await googleDriveBackupService.updateCredentials(req.body);
+      res.json({
+        success: result.success,
+        message: result.message,
+        status: result.status,
+      });
+    } catch (err: any) {
+      res.status(500).json({
+        success: false,
+        message: `Gagal memperbarui konfigurasi: ${err.message}`,
+        status: googleDriveBackupService.getAuthDiagnostics(),
+      });
+    }
   });
 
   app.post('/api/backup/sync-gdrive', async (req, res) => {
@@ -716,6 +746,11 @@ Tim Penguji & Kurikulum UjianPro`;
     });
     if (!updated) return res.status(404).json({ error: 'Notification not found' });
     res.json(updated);
+  });
+
+  // Fallback for unmatched API routes - ALWAYS return JSON error, NEVER HTML
+  app.all('/api/*', (req, res) => {
+    res.status(404).json({ error: `Endpoint API ${req.method} ${req.path} tidak ditemukan` });
   });
 
   // ==========================================

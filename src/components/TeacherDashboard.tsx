@@ -24,6 +24,10 @@ import {
   ShieldCheck,
   Search,
   Key,
+  Bot,
+  FileText,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import type {
   Question,
@@ -84,11 +88,25 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const [showQuestionModal, setShowQuestionModal] = useState<boolean>(false);
   const [editingQuestion, setEditingQuestion] = useState<Partial<Question> | null>(null);
 
+  // Gemini AI Key & Custom Prompt State
+  const [geminiStatus, setGeminiStatus] = useState<{
+    configured: boolean;
+    model: string;
+    maskedKey: string | null;
+  } | null>(null);
+  const [showGeminiKeyModal, setShowGeminiKeyModal] = useState<boolean>(false);
+  const [inputGeminiKey, setInputGeminiKey] = useState<string>('');
+  const [showKeyPassword, setShowKeyPassword] = useState<boolean>(false);
+  const [isSavingGeminiKey, setIsSavingGeminiKey] = useState<boolean>(false);
+  const [geminiKeyFeedback, setGeminiKeyFeedback] = useState<string | null>(null);
+  const [aiCustomPrompt, setAiCustomPrompt] = useState<string>('');
+
   // Student Form & Spreadsheet Import State
   const [showStudentModal, setShowStudentModal] = useState<boolean>(false);
   const [editingStudent, setEditingStudent] = useState<Partial<Student> | null>(null);
   const [csvImportText, setCsvImportText] = useState<string>('');
   const [showImportDialog, setShowImportDialog] = useState<boolean>(false);
+  const [isImportingStudents, setIsImportingStudents] = useState<boolean>(false);
 
   // Exam Creator Modal State
   const [showExamModal, setShowExamModal] = useState<boolean>(false);
@@ -161,6 +179,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
       setBackups(bData?.backups || []);
       if (bData?.authStatus) setGdriveAuth(bData.authStatus);
       setNotifications(nData || []);
+      fetchGeminiStatus();
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
     } finally {
@@ -168,8 +187,73 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     }
   };
 
+  const fetchGeminiStatus = async () => {
+    try {
+      const res = await fetch('/api/ai/status');
+      if (res.ok) {
+        const data = await res.json();
+        setGeminiStatus(data);
+      }
+    } catch (e) {
+      console.error('Error fetching Gemini AI status:', e);
+    }
+  };
+
+  const handleSaveGeminiKey = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setIsSavingGeminiKey(true);
+    setGeminiKeyFeedback(null);
+    try {
+      const res = await fetch('/api/ai/config-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: inputGeminiKey.trim() }),
+      });
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await res.text();
+        throw new Error(`Server tidak mengembalikan respons JSON (${res.status}): ${text.slice(0, 100)}`);
+      }
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setGeminiStatus(data.status);
+        setGeminiKeyFeedback('Gemini AI API Key berhasil disimpan & aktif!');
+        setTimeout(() => {
+          setShowGeminiKeyModal(false);
+          setGeminiKeyFeedback(null);
+          setInputGeminiKey('');
+        }, 1500);
+      } else {
+        setGeminiKeyFeedback(`Gagal: ${data.error || data.message || 'Terjadi kesalahan'}`);
+      }
+    } catch (err: any) {
+      setGeminiKeyFeedback(`Gagal: ${err.message}`);
+    } finally {
+      setIsSavingGeminiKey(false);
+    }
+  };
+
+  const handleResetGeminiKey = async () => {
+    if (!confirm('Hapus kustom Gemini API Key dan kembali ke pengaturan bawaan?')) return;
+    try {
+      const res = await fetch('/api/ai/config-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: '' }),
+      });
+      const data = await res.json();
+      setGeminiStatus(data.status);
+      setShowGeminiKeyModal(false);
+      setInputGeminiKey('');
+      alert('Gemini API Key berhasil direset.');
+    } catch (e: any) {
+      alert(`Gagal mereset API Key: ${e.message}`);
+    }
+  };
+
   useEffect(() => {
     fetchAllData();
+    fetchGeminiStatus();
     const interval = setInterval(fetchAllData, 10000); // 10s auto-refresh for real-time monitoring
     return () => clearInterval(interval);
   }, [dataMode]);
@@ -189,8 +273,14 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
           soloLevel: aiSoloLevel,
           type: aiType,
           count: 1,
+          customPrompt: aiCustomPrompt.trim() || undefined,
         }),
       });
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await res.text();
+        throw new Error(`Server tidak mengembalikan respons JSON: ${text.slice(0, 100)}`);
+      }
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Gagal menghasilkan soal');
       alert(`Berhasil! Soal baru berbasis Taksonomi SOLO ${aiSoloLevel} telah dibuat oleh Gemini AI.`);
@@ -304,39 +394,140 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     }
   };
 
-  // Bulk Import Students from CSV
-  const handleImportStudentsCsv = async () => {
-    if (!csvImportText.trim()) return;
+  // Save or Update Single Student (Tambah / Sunting Siswa)
+  const handleSaveStudent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingStudent?.name?.trim() || !editingStudent?.nisn?.trim()) {
+      alert('Mohon lengkapi NISN dan Nama Siswa.');
+      return;
+    }
 
-    // Parse CSV rows: NISN, Nama, Kelas, No HP Ortu
-    const lines = csvImportText.trim().split('\n');
-    const studentsList: any[] = [];
+    try {
+      const isEdit = Boolean(editingStudent.id);
+      const url = isEdit ? `/api/students/${editingStudent.id}` : `/api/students?mode=${dataMode}`;
+      const method = isEdit ? 'PUT' : 'POST';
 
-    for (const line of lines) {
-      const parts = line.split(',').map((p) => p.trim());
-      if (parts.length >= 2) {
-        studentsList.push({
+      const payload = {
+        nisn: editingStudent.nisn.trim(),
+        name: editingStudent.name.trim(),
+        grade: editingStudent.grade || 'Kelas 12',
+        className: editingStudent.className?.trim() || 'XII MIPA 1',
+        parentName: editingStudent.parentName?.trim() || 'Orang Tua Siswa',
+        parentPhone: editingStudent.parentPhone?.trim() || '+6281234567890',
+        parentEmail: editingStudent.parentEmail?.trim() || '',
+      };
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await res.text();
+        throw new Error(`Server tidak mengembalikan respons JSON (${res.status}): ${text.slice(0, 100)}`);
+      }
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Gagal menyimpan data siswa');
+
+      alert(isEdit ? 'Data siswa berhasil diperbarui!' : 'Siswa baru berhasil ditambahkan!');
+      setShowStudentModal(false);
+      setEditingStudent(null);
+      fetchAllData();
+    } catch (err: any) {
+      alert(`Gagal menyimpan siswa: ${err.message}`);
+    }
+  };
+
+  // Helper to parse student CSV/TSV text supporting comma, semicolon, tab, and skipping headers
+  const parseStudentCsvText = (text: string) => {
+    const lines = text.trim().split(/\r?\n/);
+    const parsedList: any[] = [];
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line) continue;
+
+      let parts: string[] = [];
+      if (line.includes('\t')) {
+        parts = line.split('\t').map((p) => p.trim().replace(/^["']|["']$/g, ''));
+      } else if (line.includes(';')) {
+        parts = line.split(';').map((p) => p.trim().replace(/^["']|["']$/g, ''));
+      } else {
+        parts = line.split(',').map((p) => p.trim().replace(/^["']|["']$/g, ''));
+      }
+
+      // Skip header row if present
+      const firstCol = parts[0]?.toLowerCase() || '';
+      const secondCol = parts[1]?.toLowerCase() || '';
+      if (firstCol.includes('nisn') || secondCol.includes('nama') || firstCol.includes('no')) {
+        continue;
+      }
+
+      if (parts.length >= 2 && parts[0] && parts[1]) {
+        parsedList.push({
           nisn: parts[0],
           name: parts[1],
           className: parts[2] || 'XII MIPA 1',
-          parentPhone: parts[3] || '+628123456789',
+          parentPhone: parts[3] || '+6281234567890',
+          parentName: parts[4] || 'Orang Tua',
         });
       }
     }
+    return parsedList;
+  };
 
+  const handleFileUploadSpreadsheet = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      if (text) {
+        setCsvImportText(text);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // Bulk Import Students from CSV / Spreadsheet
+  const handleImportStudentsCsv = async () => {
+    if (!csvImportText.trim()) {
+      alert('Silakan tempelkan data atau unggah file spreadsheet terlebih dahulu.');
+      return;
+    }
+
+    const studentsList = parseStudentCsvText(csvImportText);
+    if (studentsList.length === 0) {
+      alert('Tidak ada baris siswa valid yang terdeteksi. Pastikan format: NISN, Nama Lengkap, Kelas, No HP');
+      return;
+    }
+
+    setIsImportingStudents(true);
     try {
       const res = await fetch(`/api/students/import?mode=${dataMode}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ studentsList }),
       });
+
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await res.text();
+        throw new Error(`Server tidak mengembalikan respons JSON (${res.status}): ${text.slice(0, 100)}`);
+      }
+
       const data = await res.json();
-      alert(data.message || 'Import berhasil');
+      if (!res.ok) throw new Error(data.error || 'Gagal mengimpor data siswa');
+
+      alert(data.message || `Berhasil mengimpor ${studentsList.length} siswa!`);
       setShowImportDialog(false);
       setCsvImportText('');
       fetchAllData();
     } catch (err: any) {
       alert(`Import gagal: ${err.message}`);
+    } finally {
+      setIsImportingStudents(false);
     }
   };
 
@@ -381,6 +572,11 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     setSyncStatusMsg(null);
     try {
       const res = await fetch('/api/backup/sync-gdrive', { method: 'POST' });
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await res.text();
+        throw new Error(`Server tidak mengembalikan respons JSON: ${text.slice(0, 100)}`);
+      }
       const data = await res.json();
       setSyncStatusMsg({
         text: data.message,
@@ -409,18 +605,18 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
       };
 
       if (authConfigType === 'refresh_token') {
-        payload.clientId = authClientId;
-        payload.clientSecret = authClientSecret;
-        payload.refreshToken = authRefreshToken;
+        payload.clientId = authClientId.trim();
+        payload.clientSecret = authClientSecret.trim();
+        payload.refreshToken = authRefreshToken.trim();
       } else if (authConfigType === 'service_account') {
         if (authSaKeyJson.trim()) {
-          payload.serviceAccountKeyJson = authSaKeyJson;
+          payload.serviceAccountKeyJson = authSaKeyJson.trim();
         } else {
-          payload.serviceAccountEmail = authSaEmail;
-          payload.serviceAccountPrivateKey = authSaPrivateKey;
+          payload.serviceAccountEmail = authSaEmail.trim();
+          payload.serviceAccountPrivateKey = authSaPrivateKey.trim();
         }
       } else if (authConfigType === 'access_token') {
-        payload.accessToken = authAccessToken;
+        payload.accessToken = authAccessToken.trim();
       }
 
       const res = await fetch('/api/backup/configure-auth', {
@@ -428,16 +624,24 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
+
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await res.text();
+        throw new Error(`Server error (${res.status}): ${text.slice(0, 120)}`);
+      }
+
       const data = await res.json();
-      if (data.success) {
+      if (res.ok && data.success) {
         setGdriveAuth(data.status);
-        setGdriveAuthFeedback('Kredensial produksi berhasil diperbarui dan aktif!');
+        setGdriveAuthFeedback('Kredensial produksi berhasil diverifikasi dan disimpan!');
         setTimeout(() => {
           setShowGdriveAuthModal(false);
           setGdriveAuthFeedback(null);
         }, 1500);
       } else {
-        setGdriveAuthFeedback(`Gagal: ${data.message || 'Terjadi kesalahan'}`);
+        if (data.status) setGdriveAuth(data.status);
+        setGdriveAuthFeedback(`Gagal: ${data.message || 'Verifikasi Google OAuth / Service Account gagal'}`);
       }
     } catch (err: any) {
       setGdriveAuthFeedback(`Gagal: ${err.message}`);
@@ -804,14 +1008,43 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
           <div className="space-y-6">
             {/* Gemini AI Question Generator Card */}
             <div className="bg-gradient-to-r from-indigo-900 to-slate-900 text-white p-6 rounded-3xl shadow-lg border border-indigo-800">
-              <div className="flex items-center space-x-2 mb-2">
-                <Sparkles className="w-5 h-5 text-indigo-400" />
-                <h3 className="font-bold text-sm sm:text-base">Penyusunan Soal Otomatis dengan Gemini AI &amp; SOLO Taxonomy</h3>
-              </div>
-              <p className="text-xs text-indigo-200 mb-6">
-                Menghasilkan butir soal berkualitas tinggi dari jenjang SD hingga SMA/SMK dengan sintaks Taksonomi SOLO &amp; HOTS.
-              </p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-4 border-b border-indigo-800/60">
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center">
+                    <Sparkles className="w-5 h-5 text-indigo-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm sm:text-base">Penyusunan Soal Otomatis dengan Gemini AI &amp; SOLO Taxonomy</h3>
+                    <p className="text-xs text-indigo-200">
+                      Menghasilkan butir soal berkualitas tinggi dari jenjang SD hingga SMA/SMK dengan sintaks Taksonomi SOLO &amp; HOTS.
+                    </p>
+                  </div>
+                </div>
 
+                {/* Gemini API Key Status Pill & Config Button */}
+                <div className="flex items-center space-x-2">
+                  <div className="px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700 text-xs flex items-center space-x-2">
+                    <span className={`w-2 h-2 rounded-full ${geminiStatus?.configured ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                    <span className="text-[11px] text-slate-300">
+                      {geminiStatus?.configured
+                        ? `Gemini AI Aktif (${geminiStatus.maskedKey || 'Custom Key'})`
+                        : 'Simulasi Standar (Kunci Belum Diisi)'}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setInputGeminiKey('');
+                      setShowGeminiKeyModal(true);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-xs flex items-center space-x-1.5 transition-colors"
+                  >
+                    <Key className="w-3.5 h-3.5" />
+                    <span>{geminiStatus?.configured ? 'Ganti API Key' : 'Atur Gemini API Key'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Parameter Form */}
               <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs mb-4">
                 <div>
                   <label className="text-[11px] text-indigo-200 block mb-1">Jenjang</label>
@@ -885,11 +1118,79 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                 </div>
               </div>
 
-              <div className="flex justify-end">
+              {/* Custom Prompt Soal Input */}
+              <div className="mb-4 bg-slate-800/60 p-3.5 rounded-2xl border border-slate-700/80">
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="text-xs font-semibold text-indigo-200 flex items-center space-x-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Instruksi Khusus / Prompt Soal (Opsional)</span>
+                  </label>
+                  {aiCustomPrompt && (
+                    <button
+                      type="button"
+                      onClick={() => setAiCustomPrompt('')}
+                      className="text-[11px] text-slate-400 hover:text-white"
+                    >
+                      Hapus Prompt
+                    </button>
+                  )}
+                </div>
+                <textarea
+                  rows={2}
+                  value={aiCustomPrompt}
+                  onChange={(e) => setAiCustomPrompt(e.target.value)}
+                  placeholder="Misal: Buat stimulus berupa studi kasus bencana alam letusan gunung api dengan tabel data seismik, narasi 2 paragraf, dan pertanyaan analisis pemecahan masalah kritis."
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-400"
+                />
+
+                {/* Prompt Presets / Inspiration Chips */}
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  <span className="text-[10px] text-slate-400 self-center mr-1">Rekomendasi Prompt:</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setAiCustomPrompt(
+                        'Buat stimulus berupa studi kasus kontekstual kehidupan sehari-hari dengan data tabel terperinci, narasi 2 paragraf, dan fokus pada penalaran kritis HOTS.'
+                      )
+                    }
+                    className="px-2 py-0.5 rounded-lg bg-indigo-950/70 hover:bg-indigo-900 border border-indigo-700/60 text-[10px] text-indigo-200 transition-colors"
+                  >
+                    + Studi Kasus Kontekstual &amp; Data Tabel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setAiCustomPrompt(
+                        'Fokus pada asesmen kompetensi minimum (AKM) berstandar PISA dengan stimulus bacaan ilmiah/sosial dan pertanyaan pemecahan masalah multi-perspektif.'
+                      )
+                    }
+                    className="px-2 py-0.5 rounded-lg bg-indigo-950/70 hover:bg-indigo-900 border border-indigo-700/60 text-[10px] text-indigo-200 transition-colors"
+                  >
+                    + AKM Berorientasi PISA
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setAiCustomPrompt(
+                        'Sertakan narasi fenomena lingkungan atau sains modern, evaluasi penyebab dan dampaknya, serta tuntun siswa merumuskan hipotesis ilmiah.'
+                      )
+                    }
+                    className="px-2 py-0.5 rounded-lg bg-indigo-950/70 hover:bg-indigo-900 border border-indigo-700/60 text-[10px] text-indigo-200 transition-colors"
+                  >
+                    + Isu Sains &amp; Hipotesis Ilmiah
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-[11px] text-slate-400">
+                  Model AI: <strong className="text-indigo-300">gemini-3.8-flash</strong> (Server-side terproteksi)
+                </span>
+
                 <button
                   onClick={handleGenerateAiQuestion}
                   disabled={isGeneratingAi}
-                  className="px-5 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-xs shadow-md transition-all flex items-center space-x-2"
+                  className="px-5 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white font-bold text-xs shadow-md transition-all flex items-center space-x-2"
                 >
                   <Sparkles className="w-4 h-4" />
                   <span>{isGeneratingAi ? 'Menyusun Soal dengan AI...' : 'Buat Soal dengan Gemini AI'}</span>
@@ -1897,40 +2198,393 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
       )}
 
       {/* ==========================================
-          MODAL: SPREADSHEET IMPORT SISWA
+          MODAL: TAMBAH / SUNTING DATA SISWA
+      =========================================== */}
+      {showStudentModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="font-bold text-base text-slate-900 flex items-center space-x-2">
+                <Users className="w-4 h-4 text-indigo-600" />
+                <span>{editingStudent?.id ? 'Sunting Data Siswa' : 'Tambah Peserta Ujian Baru'}</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowStudentModal(false);
+                  setEditingStudent(null);
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1 text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 mb-4">
+              Daftarkan identitas siswa ke database untuk akses login ruang CBT dan penerbitan laporan berkala ke orang tua.
+            </p>
+
+            <form onSubmit={handleSaveStudent} className="space-y-3 text-xs">
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">
+                  NISN (Nomor Induk Siswa Nasional) <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editingStudent?.nisn || ''}
+                  onChange={(e) => setEditingStudent({ ...editingStudent, nisn: e.target.value })}
+                  placeholder="Contoh: 0071234567"
+                  className="w-full p-2.5 rounded-xl border border-slate-300 font-mono text-slate-900 focus:outline-none focus:border-indigo-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">
+                  Nama Lengkap Siswa <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editingStudent?.name || ''}
+                  onChange={(e) => setEditingStudent({ ...editingStudent, name: e.target.value })}
+                  placeholder="Contoh: Muhammad Danu Pradana"
+                  className="w-full p-2.5 rounded-xl border border-slate-300 text-slate-900 focus:outline-none focus:border-indigo-500"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Tingkat / Jenjang</label>
+                  <select
+                    value={editingStudent?.grade || 'Kelas 12'}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, grade: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-slate-300 text-slate-900 bg-white focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="Kelas 6">SD (Kelas 6)</option>
+                    <option value="Kelas 7">SMP (Kelas 7)</option>
+                    <option value="Kelas 8">SMP (Kelas 8)</option>
+                    <option value="Kelas 9">SMP (Kelas 9)</option>
+                    <option value="Kelas 10">SMA (Kelas 10)</option>
+                    <option value="Kelas 11">SMA (Kelas 11)</option>
+                    <option value="Kelas 12">SMA (Kelas 12)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">
+                    Kelas / Rombel <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={editingStudent?.className || ''}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, className: e.target.value })}
+                    placeholder="Contoh: XII MIPA 1"
+                    className="w-full p-2.5 rounded-xl border border-slate-300 text-slate-900 focus:outline-none focus:border-indigo-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Nama Orang Tua / Wali</label>
+                <input
+                  type="text"
+                  value={editingStudent?.parentName || ''}
+                  onChange={(e) => setEditingStudent({ ...editingStudent, parentName: e.target.value })}
+                  placeholder="Contoh: Bapak Hendra Pradana"
+                  className="w-full p-2.5 rounded-xl border border-slate-300 text-slate-900 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">
+                  Nomor WhatsApp Orang Tua <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editingStudent?.parentPhone || ''}
+                  onChange={(e) => setEditingStudent({ ...editingStudent, parentPhone: e.target.value })}
+                  placeholder="Contoh: +6281234567890"
+                  className="w-full p-2.5 rounded-xl border border-slate-300 font-mono text-slate-900 focus:outline-none focus:border-indigo-500"
+                  required
+                />
+                <span className="text-[10px] text-slate-400 mt-0.5 block">Format internasional diawali dengan kode +62</span>
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowStudentModal(false);
+                    setEditingStudent(null);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs transition-colors"
+                >
+                  {editingStudent?.id ? 'Simpan Perubahan' : 'Daftarkan Siswa'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ==========================================
+          MODAL: SPREADSHEET IMPORT SISWA (CSV/TSV)
       =========================================== */}
       {showImportDialog && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200">
-            <h3 className="font-bold text-base text-slate-900 mb-1">Impor Data Siswa dari Spreadsheet (CSV)</h3>
-            <p className="text-xs text-slate-500 mb-4">
-              Tempelkan (paste) baris tabel Excel / Google Sheets dengan format:
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="font-bold text-base text-slate-900 flex items-center space-x-2">
+                <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                <span>Impor Data Siswa dari Spreadsheet (CSV / Excel)</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowImportDialog(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 mb-3">
+              Mendukung salin-tempel langsung dari Google Sheets / Excel (koma, titik koma, atau tab):
               <br />
-              <code>NISN, Nama Lengkap, Kelas, Nomor HP Orang Tua</code>
+              <code className="text-indigo-600 font-mono">NISN, Nama Lengkap, Kelas, Nomor HP Orang Tua</code>
             </p>
 
+            {/* Drag & Drop File Area */}
+            <div
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (e.dataTransfer.files?.[0]) {
+                  handleFileUploadSpreadsheet(e.dataTransfer.files[0]);
+                }
+              }}
+              className="border-2 border-dashed border-slate-300 hover:border-emerald-500 rounded-xl p-4 text-center bg-slate-50/60 mb-3 transition-colors cursor-pointer"
+              onClick={() => {
+                const el = document.getElementById('spreadsheet-file-input');
+                if (el) el.click();
+              }}
+            >
+              <Upload className="w-5 h-5 mx-auto text-emerald-600 mb-1" />
+              <div className="text-xs font-semibold text-slate-700">Tarik &amp; lepas file CSV / Spreadsheet ke sini</div>
+              <div className="text-[11px] text-slate-400 mt-0.5">atau klik untuk memilih file dari komputer Anda</div>
+              <input
+                id="spreadsheet-file-input"
+                type="file"
+                accept=".csv,.txt,.tsv"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files?.[0]) {
+                    handleFileUploadSpreadsheet(e.target.files[0]);
+                  }
+                }}
+              />
+            </div>
+
             <textarea
-              rows={6}
+              rows={5}
               value={csvImportText}
               onChange={(e) => setCsvImportText(e.target.value)}
               placeholder="0071234510, Muhammad Danu, XII MIPA 1, +6281234567891&#10;0071234511, Zahra Amelia, XII MIPA 2, +6281234567892"
-              className="w-full p-3 rounded-xl border border-slate-300 font-mono text-xs mb-4"
+              className="w-full p-2.5 rounded-xl border border-slate-300 font-mono text-xs mb-3 text-slate-900 focus:outline-none focus:border-emerald-500"
             />
+
+            {/* Live Parsing Preview */}
+            {csvImportText.trim() && (
+              <div className="mb-4 p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                {(() => {
+                  const preview = parseStudentCsvText(csvImportText);
+                  return (
+                    <div>
+                      <div className="flex justify-between items-center mb-1.5 font-semibold text-slate-700">
+                        <span>Pratinjau Data Terdeteksi:</span>
+                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold">
+                          {preview.length} Siswa Valid
+                        </span>
+                      </div>
+                      {preview.length > 0 ? (
+                        <div className="max-h-24 overflow-y-auto space-y-1 font-mono text-[11px] text-slate-600">
+                          {preview.slice(0, 3).map((st, i) => (
+                            <div key={i} className="truncate">
+                              • {st.nisn} — {st.name} ({st.className})
+                            </div>
+                          ))}
+                          {preview.length > 3 && (
+                            <div className="text-slate-400 italic">...dan {preview.length - 3} siswa lainnya</div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-rose-600 text-[11px]">
+                          Format baris belum sesuai. Harap pastikan ada kolom NISN dan Nama Lengkap.
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
 
             <div className="flex justify-end space-x-2">
               <button
-                onClick={() => setShowImportDialog(false)}
+                type="button"
+                onClick={() => {
+                  setShowImportDialog(false);
+                  setCsvImportText('');
+                }}
                 className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold"
               >
                 Batal
               </button>
               <button
+                type="button"
+                disabled={isImportingStudents || parseStudentCsvText(csvImportText).length === 0}
                 onClick={handleImportStudentsCsv}
-                className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs"
+                className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold shadow-xs transition-colors"
               >
-                Impor Data Siswa
+                {isImportingStudents
+                  ? 'Mengimpor...'
+                  : `Impor (${parseStudentCsvText(csvImportText).length} Siswa)`}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==========================================
+          MODAL: KONFIGURASI GEMINI AI API KEY
+      =========================================== */}
+      {showGeminiKeyModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="font-bold text-base text-slate-900 flex items-center space-x-2">
+                <Sparkles className="w-4 h-4 text-indigo-600" />
+                <span>Konfigurasi Gemini AI API Key</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowGeminiKeyModal(false);
+                  setGeminiKeyFeedback(null);
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1 text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-500 mb-4">
+              Kunci API disimpan secara aman di sisi server Express (tidak terekspos ke browser) dan digunakan untuk memanggil model <strong>gemini-3.8-flash</strong> dalam penyusunan soal dan koreksi essay otomatis.
+            </p>
+
+            {/* Current Status Pill */}
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs mb-4">
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-slate-500">Status Kunci Saat Ini:</span>
+                <span
+                  className={`px-2 py-0.5 rounded font-bold text-[10px] uppercase ${
+                    geminiStatus?.configured
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-amber-100 text-amber-800'
+                  }`}
+                >
+                  {geminiStatus?.configured ? 'Terhubung' : 'Belum Diatur'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-[11px]">
+                <span className="text-slate-500">Model Aktif:</span>
+                <span className="font-mono text-indigo-700 font-bold">{geminiStatus?.model || 'gemini-3.8-flash'}</span>
+              </div>
+              {geminiStatus?.maskedKey && (
+                <div className="flex justify-between items-center text-[11px] mt-1">
+                  <span className="text-slate-500">Kunci Tersimpan:</span>
+                  <span className="font-mono text-slate-700">{geminiStatus.maskedKey}</span>
+                </div>
+              )}
+            </div>
+
+            <form onSubmit={handleSaveGeminiKey} className="space-y-3.5 text-xs">
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">
+                  Masukkan Gemini API Key (AIzaSy...)
+                </label>
+                <div className="relative">
+                  <input
+                    type={showKeyPassword ? 'text' : 'password'}
+                    value={inputGeminiKey}
+                    onChange={(e) => setInputGeminiKey(e.target.value)}
+                    placeholder="Contoh: AIzaSyD..."
+                    className="w-full p-2.5 pr-10 rounded-xl border border-slate-300 font-mono text-slate-900 focus:outline-none focus:border-indigo-500"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowKeyPassword(!showKeyPassword)}
+                    className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                  >
+                    {showKeyPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <span className="text-[10px] text-slate-400 mt-1 block">
+                  Dapatkan API Key gratis di Google AI Studio (aistudio.google.com).
+                </span>
+              </div>
+
+              {geminiKeyFeedback && (
+                <div
+                  className={`p-3 rounded-xl text-xs ${
+                    geminiKeyFeedback.includes('Gagal')
+                      ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                      : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  }`}
+                >
+                  {geminiKeyFeedback}
+                </div>
+              )}
+
+              <div className="flex justify-between items-center pt-3 border-t border-slate-100">
+                {geminiStatus?.configured ? (
+                  <button
+                    type="button"
+                    onClick={handleResetGeminiKey}
+                    className="text-rose-600 hover:text-rose-700 text-xs font-semibold"
+                  >
+                    Hapus / Reset Kunci
+                  </button>
+                ) : (
+                  <div />
+                )}
+
+                <div className="flex space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowGeminiKeyModal(false);
+                      setGeminiKeyFeedback(null);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingGeminiKey || !inputGeminiKey.trim()}
+                    className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold shadow-xs transition-colors"
+                  >
+                    {isSavingGeminiKey ? 'Menyimpan...' : 'Simpan &amp; Aktifkan'}
+                  </button>
+                </div>
+              </div>
+            </form>
           </div>
         </div>
       )}
