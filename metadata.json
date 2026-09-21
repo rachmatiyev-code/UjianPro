@@ -1,0 +1,6 @@
+{
+  "name": "UjianPro AI - Sistem Ujian Online & Pengawasan Cerdas",
+  "description": "Aplikasi CBT ujian online berbasis AI dengan proctoring cerdas, bank soal SOLO Taxonomy, penilaian otomatis, integrasi PostgreSQL & Redis, backup Google Drive, dan analitik performa.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
