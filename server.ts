@@ -660,16 +660,25 @@ googleDriveBackupService.registerScheduledBackupCallback(async () => {
   });
 
   app.post('/api/backup/sync-gdrive', async (req, res) => {
-    const state = dbRepository.getState();
-    const summary = {
-      questions: state.questions.length,
-      students: state.students.length,
-      exams: state.exams.length,
-      results: state.results.length,
-    };
+    try {
+      const state = dbRepository.getState();
+      const summary = {
+        questions: state.questions.length,
+        students: state.students.length,
+        exams: state.exams.length,
+        results: state.results.length,
+      };
 
-    const syncResult = await googleDriveBackupService.syncDatabaseSnapshot(state, summary);
-    res.json(syncResult);
+      const syncResult = await googleDriveBackupService.syncDatabaseSnapshot(state, summary);
+      res.json(syncResult);
+    } catch (err: any) {
+      console.error('Backup sync error:', err);
+      res.status(500).json({
+        success: false,
+        isDuplicate: false,
+        message: `Terjadi kendala server saat sinkronisasi: ${err.message || 'Gagal'}`,
+      });
+    }
   });
 
   app.delete('/api/backup/:id', (req, res) => {

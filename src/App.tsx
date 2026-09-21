@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Navbar } from './components/Navbar.js';
 import { ExamMode } from './components/ExamMode.js';
 import { TeacherDashboard } from './components/TeacherDashboard.js';
+import { ErrorBoundary } from './components/ErrorBoundary.js';
 import type { SchoolProfile, SystemStatus } from './types.js';
 
 export default function App() {
@@ -69,15 +70,17 @@ export default function App() {
 
       {/* Main Screen Router */}
       <main className="flex-1">
-        {currentView === 'student' ? (
-          <ExamMode dataMode={dataMode} />
-        ) : (
-          <TeacherDashboard
-            dataMode={dataMode}
-            schoolProfile={schoolProfile}
-            onUpdateSchoolProfile={setSchoolProfile}
-          />
-        )}
+        <ErrorBoundary fallbackTitle="Terjadi Kendala pada Halaman">
+          {currentView === 'student' ? (
+            <ExamMode dataMode={dataMode} />
+          ) : (
+            <TeacherDashboard
+              dataMode={dataMode}
+              schoolProfile={schoolProfile}
+              onUpdateSchoolProfile={setSchoolProfile}
+            />
+          )}
+        </ErrorBoundary>
       </main>
 
       {/* Persistent Bottom System Footer */}
