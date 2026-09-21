@@ -669,7 +669,8 @@ googleDriveBackupService.registerScheduledBackupCallback(async () => {
         results: state.results.length,
       };
 
-      const syncResult = await googleDriveBackupService.syncDatabaseSnapshot(state, summary);
+      const forceUpload = req.body?.force === true || req.query?.force === 'true';
+      const syncResult = await googleDriveBackupService.syncDatabaseSnapshot(state, summary, forceUpload);
       res.json(syncResult);
     } catch (err: any) {
       console.error('Backup sync error:', err);
@@ -679,6 +680,45 @@ googleDriveBackupService.registerScheduledBackupCallback(async () => {
         message: `Terjadi kendala server saat sinkronisasi: ${err.message || 'Gagal'}`,
       });
     }
+  });
+
+  app.get('/api/backup/:id/download', (req, res) => {
+    const history = googleDriveBackupService.getBackupHistory();
+    const record = history.find((b) => b.id === req.params.id);
+    if (!record) {
+      return res.status(404).json({ error: 'File cadangan tidak ditemukan' });
+    }
+    const payload = googleDriveBackupService.getSnapshotPayload(record.checksum);
+    if (!payload) {
+      // Generate on-the-fly from state if available
+      const state = dbRepository.getState();
+      const raw = JSON.stringify(state, null, 2);
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="${record.name.replace('.enc.json', '.json')}"`);
+      return res.send(raw);
+    }
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${record.name}"`);
+    res.send(payload);
+  });
+
+  app.get('/api/backup/:id/download-decrypted', (req, res) => {
+    const history = googleDriveBackupService.getBackupHistory();
+    const record = history.find((b) => b.id === req.params.id);
+    if (!record) {
+      return res.status(404).json({ error: 'File cadangan tidak ditemukan' });
+    }
+    const payload = googleDriveBackupService.getSnapshotPayload(record.checksum);
+    let jsonContent: string;
+    if (payload) {
+      jsonContent = googleDriveBackupService.decryptPayload(payload);
+    } else {
+      jsonContent = JSON.stringify(dbRepository.getState(), null, 2);
+    }
+    const plainName = record.name.replace('.enc.json', '.json');
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${plainName}"`);
+    res.send(jsonContent);
   });
 
   app.delete('/api/backup/:id', (req, res) => {

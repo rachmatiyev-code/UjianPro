@@ -21,6 +21,7 @@ import {
   Cloud,
   CheckCircle2,
   ExternalLink,
+  FolderOpen,
   ShieldCheck,
   Search,
   Key,
@@ -129,8 +130,13 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     expiresAt: string | null;
     tokenAgeMinutes: number;
     folder: string;
+    folderId?: string | null;
+    folderLink?: string | null;
+    shareWithEmail?: string | null;
     autoBackupIntervalHours: number;
     deduplicationActive: boolean;
+    lastError?: string | null;
+    cloudConnected?: boolean;
   } | null>(null);
 
   const [showGdriveAuthModal, setShowGdriveAuthModal] = useState<boolean>(false);
@@ -142,6 +148,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const [authSaPrivateKey, setAuthSaPrivateKey] = useState<string>('');
   const [authSaKeyJson, setAuthSaKeyJson] = useState<string>('');
   const [authAccessToken, setAuthAccessToken] = useState<string>('');
+  const [authFolder, setAuthFolder] = useState<string>('UjianOnline_Backups');
+  const [authFolderId, setAuthFolderId] = useState<string>('');
+  const [authShareEmail, setAuthShareEmail] = useState<string>('rachmatiyev@gmail.com');
   const [authIntervalHours, setAuthIntervalHours] = useState<number>(6);
   const [isSavingGdriveAuth, setIsSavingGdriveAuth] = useState<boolean>(false);
   const [gdriveAuthFeedback, setGdriveAuthFeedback] = useState<string | null>(null);
@@ -662,7 +671,11 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     setIsSyncingGDrive(true);
     setSyncStatusMsg(null);
     try {
-      const res = await fetch('/api/backup/sync-gdrive', { method: 'POST' });
+      const res = await fetch('/api/backup/sync-gdrive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force: true }),
+      });
       const contentType = res.headers.get('content-type');
       let data: any = null;
       if (contentType && contentType.includes('application/json')) {
@@ -674,7 +687,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
       if (res.ok && data) {
         if (data.isDuplicate) {
           setSyncStatusMsg({
-            text: data.message || 'Sinkronisasi dilewati: Snapshot database sudah identik dengan cadangan sebelumnya (Anti-Duplikasi Aktif).',
+            text: data.message || 'Sinkronisasi dilewati: Snapshot database sudah identik dengan cadangan sebelumnya di Google Drive (Anti-Duplikasi Aktif).',
             success: true,
           });
           if (data.backup) {
@@ -684,9 +697,10 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
             });
           }
         } else if (data.success) {
+          const isCloud = data.driveUploaded !== false && data.backup?.isRealCloudUpload === true;
           setSyncStatusMsg({
-            text: data.message || 'Database berhasil disinkronkan dan dienkripsi ke Google Drive!',
-            success: true,
+            text: data.message || (isCloud ? 'Database berhasil diunggah ke Google Drive!' : 'Snapshot tersimpan di Server Vault lokal.'),
+            success: isCloud,
           });
           if (data.backup) {
             setBackups((prev) => [data.backup, ...prev.filter((item) => item.id !== data.backup.id)]);
@@ -714,14 +728,17 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
             results: results.length,
           },
           storageLocation: 'Google Drive',
+          isRealCloudUpload: false,
+          cloudSyncStatus: 'local_vault_only',
+          uploadError: 'Dev environment: Google Drive credentials not yet configured.',
           gdriveFileId: `local_${Date.now()}`,
           createdAt: now.toISOString(),
           isEncrypted: true,
         };
         setBackups((prev) => [fallbackSnapshot, ...prev]);
         setSyncStatusMsg({
-          text: 'Sinkronisasi berhasil! Snapshot data telah diamankan ke ruang penyimpanan cloud & lokal.',
-          success: true,
+          text: 'Snapshot tersimpan di server vault lokal (Google Drive belum dihubungkan).',
+          success: false,
         });
       }
     } catch (err: any) {
@@ -741,7 +758,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     setGdriveAuthFeedback(null);
     try {
       const payload: any = {
-        folderName: 'UjianOnline_Backups',
+        folderName: authFolder.trim() || 'UjianOnline_Backups',
+        folderId: authFolderId.trim() || undefined,
+        shareWithEmail: authShareEmail.trim() || undefined,
         autoBackupIntervalHours: Number(authIntervalHours) || 6,
       };
 
@@ -790,9 +809,11 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         const clientStatus = {
           connected: true,
           method: authConfigType === 'refresh_token'
-            ? 'OAuth 2.0 (Refresh Token)'
-            : (authConfigType === 'service_account' ? 'Service Account' : 'Access Token'),
-          folderId: 'UjianOnline_Backups',
+            ? 'oauth_refresh_token'
+            : (authConfigType === 'service_account' ? 'service_account' : 'access_token'),
+          folder: authFolder.trim() || 'UjianOnline_Backups',
+          folderId: authFolderId.trim() || undefined,
+          shareWithEmail: authShareEmail.trim() || undefined,
           lastVerified: new Date().toISOString(),
           isAutoRenewing: true,
           clientIdMasked: authClientId ? `${authClientId.slice(0, 10)}...` : undefined,
@@ -803,7 +824,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
           localStorage.setItem('ujianpro_gdrive_status', JSON.stringify(clientStatus));
         } catch (_) {}
         setGdriveAuth(clientStatus as any);
-        setGdriveAuthFeedback('Kredensial Google Drive berhasil disimpan (Mode Klien / Local Storage)! Cadangan otomatis siap disinkronkan.');
+        setGdriveAuthFeedback('Kredensial Google Drive berhasil disimpan! Cadangan otomatis siap disinkronkan.');
         setTimeout(() => {
           setShowGdriveAuthModal(false);
           setGdriveAuthFeedback(null);
@@ -1883,6 +1904,18 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
+                  {(gdriveAuth?.folderLink || gdriveAuth?.folderId) && (
+                    <a
+                      href={gdriveAuth.folderLink || `https://drive.google.com/drive/folders/${gdriveAuth.folderId}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold border border-blue-200 transition-colors shadow-2xs"
+                    >
+                      <FolderOpen className="w-3.5 h-3.5" />
+                      <span>Buka Folder di Drive ↗</span>
+                    </a>
+                  )}
+
                   <button
                     onClick={() => setShowGdriveAuthModal(true)}
                     className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold border border-slate-300 transition-colors shadow-2xs"
@@ -1969,9 +2002,22 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                   </div>
                   <div>
                     <span className="text-slate-400 block text-[11px]">Folder Target Google Drive</span>
-                    <span className="font-semibold text-slate-800 font-mono">
-                      {gdriveAuth?.folder || 'UjianOnline_Backups'}
-                    </span>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="font-semibold text-slate-800 font-mono">
+                        {gdriveAuth?.folder || 'UjianOnline_Backups'}
+                      </span>
+                      {gdriveAuth?.folderLink && (
+                        <a
+                          href={gdriveAuth.folderLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-indigo-600 hover:text-indigo-800"
+                          title="Buka Folder di Google Drive"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
                   </div>
                   <div>
                     <span className="text-slate-400 block text-[11px]">Pencegahan Duplikasi</span>
@@ -1982,7 +2028,20 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                   </div>
                 </div>
 
-                {gdriveAuth?.method === 'access_token' && (
+                {gdriveAuth?.lastError && (
+                  <div className="mt-3 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start space-x-2.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold block">Status Koneksi Cloud Google Drive:</span>
+                      <span>{gdriveAuth.lastError}</span>
+                      <span className="block mt-1 text-[11px] text-amber-800">
+                        Data cadangan Anda tetap aman di Vault Server lokal dan dapat diunduh kapan saja. Klik tombol <strong>"Atur Kredensial Produksi"</strong> di atas untuk memperbarui token atau Service Account Key Anda.
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {gdriveAuth?.method === 'access_token' && !gdriveAuth?.lastError && (
                   <div className="mt-3 p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start space-x-2">
                     <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                     <span>
@@ -1990,6 +2049,28 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                     </span>
                   </div>
                 )}
+              </div>
+
+              {/* Troubleshooting / Explanation Guide */}
+              <div className="p-4 rounded-xl bg-indigo-50/70 border border-indigo-100 text-indigo-950 text-xs space-y-2">
+                <div className="font-bold flex items-center gap-1.5 text-indigo-900">
+                  <Cloud className="w-4 h-4 text-indigo-600" />
+                  <span>Panduan Lokasi Folder &amp; Verifikasi Cadangan Google Drive:</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-[11px] text-slate-700 leading-relaxed">
+                  <div className="bg-white/80 p-2.5 rounded-lg border border-indigo-100/60">
+                    <span className="font-bold text-indigo-900 block mb-1">1. Nama Folder Target</span>
+                    File snapshot disimpan di folder <code className="bg-indigo-100 px-1 py-0.5 rounded text-indigo-800 font-mono font-bold">{gdriveAuth?.folder || 'UjianOnline_Backups'}</code>. Jika Anda mencari di folder <em>"Backup UjianPro"</em>, silakan ubah nama folder target menjadi <code>Backup UjianPro</code> di tombol <strong>Atur Kredensial Produksi</strong>.
+                  </div>
+                  <div className="bg-white/80 p-2.5 rounded-lg border border-indigo-100/60">
+                    <span className="font-bold text-indigo-900 block mb-1">2. Menu "Dibagikan kepada saya"</span>
+                    Jika Anda menggunakan <strong>Google Service Account</strong>, file disimpan di drive akun robot Google Cloud. Pastikan email Gmail pribadi Anda dimasukkan di kolom konfigurasi agar folder otomatis dibagikan dan muncul di menu <em>"Dibagikan kepada saya"</em> di Google Drive Anda.
+                  </div>
+                  <div className="bg-white/80 p-2.5 rounded-lg border border-indigo-100/60">
+                    <span className="font-bold text-indigo-900 block mb-1">3. Status "Cloud" vs "Server Vault"</span>
+                    Lihat kolom status pada tabel di bawah. Jika berstatus <span className="text-emerald-700 font-bold">Google Drive Cloud</span>, file dapat langsung dibuka dengan klik <em>Buka File ↗</em>. Jika berstatus <span className="text-amber-700 font-bold">Server Vault</span>, file disimpan lokal di server dan dapat diunduh langsung.
+                  </div>
+                </div>
               </div>
 
               {/* Sync Status Banner */}
@@ -2013,10 +2094,10 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                     <tr className="border-b border-slate-200 text-slate-500 uppercase text-[10px]">
                       <th className="pb-2">Nama File Backup</th>
                       <th className="pb-2">Waktu Pembuatan</th>
-                      <th className="pb-2">Lokasi Sinkronisasi</th>
+                      <th className="pb-2">Status &amp; Lokasi Penyimpanan</th>
                       <th className="pb-2">Ukuran &amp; Enkripsi</th>
-                      <th className="pb-2">Checksum (Anti-Duplikasi)</th>
-                      <th className="pb-2 text-right">Aksi</th>
+                      <th className="pb-2">Checksum SHA-256</th>
+                      <th className="pb-2 text-right">Aksi &amp; Unduh</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -2033,23 +2114,54 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                         const dateFormatted = b?.createdAt
                           ? new Date(b.createdAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })
                           : '-';
-                        const location = b?.storageLocation || 'Google Drive';
+                        const isCloud = b?.isRealCloudUpload === true;
                         const sizeStr = typeof b?.fileSizeBytes === 'number'
                           ? `${Math.round(b.fileSizeBytes / 1024)} KB`
                           : '138 KB';
                         const checksumSnippet = typeof b?.checksum === 'string' && b.checksum.length >= 8
                           ? `${b.checksum.substring(0, 16)}...`
                           : 'sha256-verified';
+                        const driveLink = b?.gdriveWebViewLink || (b?.gdriveFileId ? `https://drive.google.com/file/d/${b.gdriveFileId}/view` : undefined);
 
                         return (
                           <tr key={backupId} className="hover:bg-slate-50">
-                            <td className="py-2.5 font-bold text-slate-900">{fileName}</td>
+                            <td className="py-2.5 font-medium text-slate-900">
+                              <div className="font-bold">{fileName}</div>
+                              {isCloud ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full mt-0.5">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                  Tersimpan di Google Drive Cloud
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full mt-0.5" title={b?.uploadError || 'Tersimpan di server vault'}>
+                                  <AlertTriangle className="w-3 h-3 text-amber-600" />
+                                  Server Vault Lokal (Drive Belum Terhubung)
+                                </span>
+                              )}
+                            </td>
                             <td className="py-2.5 text-slate-500">{dateFormatted}</td>
                             <td className="py-2.5">
-                              <span className="inline-flex items-center space-x-1 text-blue-700 font-semibold">
-                                <Cloud className="w-3 h-3 text-blue-500" />
-                                <span>{location}</span>
-                              </span>
+                              <div>
+                                <span className="font-semibold text-slate-800 flex items-center gap-1">
+                                  <Cloud className="w-3.5 h-3.5 text-blue-500" />
+                                  <span>{gdriveAuth?.folder || 'UjianOnline_Backups'}</span>
+                                </span>
+                                {isCloud && driveLink ? (
+                                  <a
+                                    href={driveLink}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-800 font-bold hover:underline mt-0.5"
+                                  >
+                                    <span>Buka File di Drive</span>
+                                    <ExternalLink className="w-3 h-3" />
+                                  </a>
+                                ) : (
+                                  <span className="text-[10px] text-slate-400 block mt-0.5">
+                                    {b?.uploadError ? b.uploadError.slice(0, 45) + '...' : 'Tersimpan di Server Vault'}
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="py-2.5">
                               <span className="font-mono text-slate-700">{sizeStr}</span>
@@ -2061,18 +2173,36 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                               {checksumSnippet}
                             </td>
                             <td className="py-2.5 text-right">
-                              <button
-                                onClick={() => {
-                                  if (confirm('Hapus arsip backup ini?')) {
-                                    fetch(`/api/backup/${backupId}`, { method: 'DELETE' }).catch(() => {});
-                                    setBackups((prev) => prev.filter((item) => item.id !== backupId));
-                                  }
-                                }}
-                                className="p-1 text-slate-400 hover:text-rose-600"
-                                title="Hapus File Backup"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              <div className="flex items-center justify-end space-x-1.5">
+                                <a
+                                  href={`/api/backup/${backupId}/download`}
+                                  download
+                                  title="Unduh Cadangan Terenkripsi (.enc.json)"
+                                  className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-indigo-600 transition-colors"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                </a>
+                                <a
+                                  href={`/api/backup/${backupId}/download-decrypted`}
+                                  download
+                                  title="Unduh File JSON Terbuka (.json)"
+                                  className="px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[10px] font-bold transition-colors"
+                                >
+                                  .JSON
+                                </a>
+                                <button
+                                  onClick={() => {
+                                    if (confirm('Hapus arsip backup ini?')) {
+                                      fetch(`/api/backup/${backupId}`, { method: 'DELETE' }).catch(() => {});
+                                      setBackups((prev) => prev.filter((item) => item.id !== backupId));
+                                    }
+                                  }}
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg transition-colors"
+                                  title="Hapus File Backup"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -3035,38 +3165,75 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                 </div>
               )}
 
-              {/* Common: Backup Schedule Interval */}
-              <div className="pt-2 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">
-                    Jadwal Interval Backup Otomatis
-                  </label>
-                  <select
-                    value={authIntervalHours}
-                    onChange={(e) => setAuthIntervalHours(Number(e.target.value))}
-                    className="w-full p-2.5 rounded-xl border border-slate-300 bg-white"
-                  >
-                    <option value={1}>Setiap 1 Jam Sekali</option>
-                    <option value={3}>Setiap 3 Jam Sekali</option>
-                    <option value={6}>Setiap 6 Jam Sekali (Rekomendasi)</option>
-                    <option value={12}>Setiap 12 Jam Sekali</option>
-                    <option value={24}>Setiap 24 Jam (Sekali Sehari)</option>
-                  </select>
+              {/* Common: Backup Schedule Interval & Target Folder */}
+              <div className="pt-2 border-t border-slate-100 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">
+                      Jadwal Interval Backup Otomatis
+                    </label>
+                    <select
+                      value={authIntervalHours}
+                      onChange={(e) => setAuthIntervalHours(Number(e.target.value))}
+                      className="w-full p-2.5 rounded-xl border border-slate-300 bg-white text-xs"
+                    >
+                      <option value={1}>Setiap 1 Jam Sekali</option>
+                      <option value={3}>Setiap 3 Jam Sekali</option>
+                      <option value={6}>Setiap 6 Jam Sekali (Rekomendasi)</option>
+                      <option value={12}>Setiap 12 Jam Sekali</option>
+                      <option value={24}>Setiap 24 Jam (Sekali Sehari)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">
+                      Nama Folder Target di Google Drive
+                    </label>
+                    <input
+                      type="text"
+                      value={authFolder}
+                      onChange={(e) => setAuthFolder(e.target.value)}
+                      placeholder="UjianOnline_Backups"
+                      className="w-full p-2.5 rounded-xl border border-slate-300 bg-white font-mono text-xs text-slate-800"
+                    />
+                    <span className="text-[10px] text-slate-400 mt-0.5 block">
+                      Misal: <code>UjianOnline_Backups</code> atau <code>Backup UjianPro</code>
+                    </span>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">
-                    Folder Google Drive Khusus
-                  </label>
-                  <input
-                    type="text"
-                    disabled
-                    value="UjianOnline_Backups"
-                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-mono text-[11px] text-slate-600"
-                  />
-                  <span className="text-[10px] text-slate-400 mt-0.5 block">
-                    Dilengkapi verifikasi Checksum SHA-256 anti-duplikasi.
-                  </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">
+                      ID Folder Google Drive (Opsional)
+                    </label>
+                    <input
+                      type="text"
+                      value={authFolderId}
+                      onChange={(e) => setAuthFolderId(e.target.value)}
+                      placeholder="1aBcD_xYz123... (opsional)"
+                      className="w-full p-2.5 rounded-xl border border-slate-300 bg-white font-mono text-[11px] text-slate-800"
+                    />
+                    <span className="text-[10px] text-slate-400 mt-0.5 block">
+                      Kosongkan jika ingin sistem membuat folder otomatis berdasarkan nama.
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">
+                      Email Akun Google Pribadi (Bagi Akses)
+                    </label>
+                    <input
+                      type="email"
+                      value={authShareEmail}
+                      onChange={(e) => setAuthShareEmail(e.target.value)}
+                      placeholder="guru@sekolah.sch.id / akun@gmail.com"
+                      className="w-full p-2.5 rounded-xl border border-slate-300 bg-white text-xs text-slate-800"
+                    />
+                    <span className="text-[10px] text-slate-400 mt-0.5 block">
+                      Penting jika memakai Service Account agar folder muncul di menu Google Drive Anda.
+                    </span>
+                  </div>
                 </div>
               </div>
 

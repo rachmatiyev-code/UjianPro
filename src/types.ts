@@ -161,6 +161,12 @@ export interface BackupRecord {
   };
   storageLocation: 'Google Drive' | 'Cloud Storage Encrypted' | 'Local Database';
   gdriveFileId?: string;
+  gdriveWebViewLink?: string;
+  gdriveFolderId?: string;
+  gdriveFolderLink?: string;
+  isRealCloudUpload?: boolean;
+  cloudSyncStatus?: 'uploaded_to_drive' | 'local_vault_only';
+  uploadError?: string | null;
   createdAt: string;
   isEncrypted: boolean;
 }
