@@ -31,6 +31,13 @@ export interface GDriveAuthDiagnostics {
   deduplicationActive: boolean;
   lastError?: string | null;
   cloudConnected?: boolean;
+  accountEmail?: string | null;
+  storageQuota?: {
+    totalGB: string;
+    usedGB: string;
+    freeGB: string;
+    percentUsed: number;
+  } | null;
 }
 
 class GoogleDriveBackupService {
@@ -42,6 +49,13 @@ class GoogleDriveBackupService {
   private backupHistory: BackupRecord[] = [];
   private storedSnapshots = new Map<string, string>(); // checksum -> encryptedPayload
   private lastAuthError: string | null = null;
+  private accountEmail: string | null = null;
+  private storageQuotaInfo: {
+    totalGB: string;
+    usedGB: string;
+    freeGB: string;
+    percentUsed: number;
+  } | null = null;
 
   // OAuth & Service Account Credentials State
   private clientId = process.env.GOOGLE_CLIENT_ID || '';
@@ -188,6 +202,8 @@ class GoogleDriveBackupService {
       deduplicationActive: true,
       lastError: this.lastAuthError,
       cloudConnected,
+      accountEmail: this.accountEmail,
+      storageQuota: this.storageQuotaInfo,
     };
   }
 
@@ -245,6 +261,21 @@ class GoogleDriveBackupService {
 
       const aboutData = (await aboutRes.json()) as any;
       const userEmail = aboutData?.user?.emailAddress || 'User';
+      this.accountEmail = userEmail;
+
+      let quotaSummaryStr = '';
+      if (aboutData?.storageQuota) {
+        const limitBytes = Number(aboutData.storageQuota.limit || 0);
+        const usageBytes = Number(aboutData.storageQuota.usage || 0);
+        if (limitBytes > 0) {
+          const totalGB = (limitBytes / (1024 * 1024 * 1024)).toFixed(1);
+          const usedGB = (usageBytes / (1024 * 1024 * 1024)).toFixed(1);
+          const freeGB = Math.max(0, (limitBytes - usageBytes) / (1024 * 1024 * 1024)).toFixed(1);
+          const percentUsed = Math.min(100, Math.round((usageBytes / limitBytes) * 100));
+          this.storageQuotaInfo = { totalGB, usedGB, freeGB, percentUsed };
+          quotaSummaryStr = ` (Total Kuota: ${totalGB} GB, Sisa: ${freeGB} GB)`;
+        }
+      }
 
       // Test 2: Check target folder
       const folderInfo = await this.getOrCreateFolder(token);
@@ -289,7 +320,7 @@ class GoogleDriveBackupService {
 
         if (parsedErr.includes('storage quota') || parsedErr.includes('storageQuotaExceeded')) {
           const friendlyMsg =
-            'Google menolak penulisan: Service Account tidak memiliki kuota penyimpanan di Google Drive pribadi biasa. Gunakan Access Token / Refresh Token akun Gmail pribadi Anda (tersedia kuota 15 GB).';
+            'Google menolak penulisan: Kuota penyimpanan akun tidak mencukupi atau Service Account tidak memiliki storage drive sendiri. Gunakan Access Token / Refresh Token akun Google Drive pribadi Anda (misal Google One 100 GB).';
           this.lastAuthError = friendlyMsg;
           return {
             success: false,
@@ -316,11 +347,12 @@ class GoogleDriveBackupService {
       this.lastAuthError = null;
       return {
         success: true,
-        message: `Koneksi Google Drive Sukses! Terhubung ke akun: ${userEmail}. Kuota aktif dan folder "${this.folderName}" siap menerima cadangan database.`,
+        message: `Koneksi Google Drive Sukses! Terhubung ke akun: ${userEmail}${quotaSummaryStr}. Kuota aktif dan folder "${this.folderName}" siap menerima cadangan database.`,
         details: {
           userEmail,
           folderId: folderInfo.folderId,
           folderLink: folderInfo.folderLink,
+          storageQuota: this.storageQuotaInfo,
         },
       };
     } catch (err: any) {

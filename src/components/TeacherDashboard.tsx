@@ -29,6 +29,7 @@ import {
   FileText,
   Eye,
   EyeOff,
+  HardDrive,
 } from 'lucide-react';
 import type {
   Question,
@@ -137,6 +138,13 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     deduplicationActive: boolean;
     lastError?: string | null;
     cloudConnected?: boolean;
+    accountEmail?: string | null;
+    storageQuota?: {
+      totalGB: string;
+      usedGB: string;
+      freeGB: string;
+      percentUsed: number;
+    } | null;
   } | null>(null);
 
   const [showGdriveAuthModal, setShowGdriveAuthModal] = useState<boolean>(false);
@@ -2116,6 +2124,45 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                   </div>
                 </div>
 
+                {/* Live Google Drive Storage Quota (Google One 100 GB / Basic Plan) */}
+                {gdriveAuth?.storageQuota && (
+                  <div className="mt-3.5 p-3 rounded-xl bg-white border border-slate-200/90 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center space-x-2.5">
+                      <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600 shrink-0">
+                        <HardDrive className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-800">
+                            Kuota Google Drive {gdriveAuth.accountEmail ? `(${gdriveAuth.accountEmail})` : ''}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700">
+                            {Number(gdriveAuth.storageQuota.totalGB) >= 90 ? 'Google One 100 GB' : `${gdriveAuth.storageQuota.totalGB} GB Plan`}
+                          </span>
+                        </div>
+                        <p className="text-slate-600 text-[11px] mt-0.5">
+                          Total: <strong className="text-slate-800">{gdriveAuth.storageQuota.totalGB} GB</strong> &bull; Sisa Ruang Bebas: <strong className="text-emerald-700">{gdriveAuth.storageQuota.freeGB} GB</strong> &bull; Terpakai: <span className="text-slate-700">{gdriveAuth.storageQuota.usedGB} GB ({gdriveAuth.storageQuota.percentUsed}%)</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="w-full sm:w-48 shrink-0 flex flex-col gap-1">
+                      <div className="flex justify-between text-[10px] text-slate-500 font-semibold">
+                        <span>Terpakai {gdriveAuth.storageQuota.percentUsed}%</span>
+                        <span>Sisa {gdriveAuth.storageQuota.freeGB} GB</span>
+                      </div>
+                      <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200">
+                        <div
+                          className={`h-2 rounded-full transition-all duration-500 ${
+                            gdriveAuth.storageQuota.percentUsed > 85 ? 'bg-amber-500' : 'bg-indigo-600'
+                          }`}
+                          style={{ width: `${Math.max(3, gdriveAuth.storageQuota.percentUsed)}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {(!gdriveAuth?.cloudConnected || gdriveAuth?.lastError) && (
                   <div className="mt-3 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex items-start space-x-2.5">
@@ -3165,7 +3212,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                     <ol className="list-decimal pl-4 space-y-1 text-slate-800">
                       <li>Buka <a href="https://developers.google.com/oauthplayground" target="_blank" rel="noreferrer" className="text-indigo-600 underline font-semibold">developers.google.com/oauthplayground</a></li>
                       <li>Di panel kiri, scroll dan pilih <strong>Drive API v3</strong> lalu centang <code className="bg-white/80 px-1 py-0.5 rounded font-mono text-indigo-700 text-[10px]">https://www.googleapis.com/auth/drive.file</code></li>
-                      <li>Klik tombol biru <strong>Authorize APIs</strong> &mdash; pilih akun Google Drive Anda (<span className="font-semibold text-slate-900">{authShareEmail || 'rachmatiyev@gmail.com'}</span>) yang memiliki kuota 15 GB.</li>
+                      <li>Klik tombol biru <strong>Authorize APIs</strong> &mdash; pilih akun Google Drive Anda (<span className="font-semibold text-slate-900">{authShareEmail || 'rachmatiyev@gmail.com'}</span>) yang memiliki kuota aktif Anda (termasuk paket Google One 100 GB).</li>
                       <li>Klik tombol biru <strong>Exchange authorization code for tokens</strong>.</li>
                       <li>Salin teks pada kotak <strong>Access token</strong> (diawali dengan <code className="bg-white/80 px-1 rounded font-mono text-indigo-700">ya29...</code>) dan tempel di bawah ini.</li>
                     </ol>
