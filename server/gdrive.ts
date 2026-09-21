@@ -33,9 +33,9 @@ export interface GDriveAuthDiagnostics {
 }
 
 class GoogleDriveBackupService {
-  private folderName = process.env.GOOGLE_DRIVE_FOLDER_NAME || 'UjianOnline_Backups';
-  private targetFolderId: string | null = null;
-  private targetFolderLink: string | null = null;
+  private folderName = process.env.GOOGLE_DRIVE_FOLDER_NAME || 'Backup UjianPro';
+  private targetFolderId: string | null = '1I00tLk5AdneGoT9FHdpzNhndWUyjOj3V';
+  private targetFolderLink: string | null = 'https://drive.google.com/drive/folders/1I00tLk5AdneGoT9FHdpzNhndWUyjOj3V';
   private shareWithEmail = process.env.GOOGLE_DRIVE_SHARE_EMAIL || 'rachmatiyev@gmail.com';
   private encryptionSecret = process.env.BACKUP_ENCRYPTION_SECRET || 'ujianpro-secure-aes256-key';
   private backupHistory: BackupRecord[] = [];
@@ -47,13 +47,11 @@ class GoogleDriveBackupService {
   private clientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
   private refreshToken = process.env.GOOGLE_REFRESH_TOKEN || '';
   private serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || '';
-  private serviceAccountPrivateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || '';
+  private serviceAccountPrivateKey = '';
 
   // Cached Bearer Access Token & Expiry
-  private cachedAccessToken: string | null = process.env.GOOGLE_DRIVE_ACCESS_TOKEN || null;
-  private tokenExpiresAt: number | null = process.env.GOOGLE_DRIVE_ACCESS_TOKEN
-    ? Date.now() + 3600 * 1000
-    : null;
+  private cachedAccessToken: string | null = null;
+  private tokenExpiresAt: number | null = null;
   private tokenCreatedAt: number = Date.now();
 
   // Background Periodic Backup Timer
@@ -62,14 +60,23 @@ class GoogleDriveBackupService {
   private onScheduledBackupCallback: (() => Promise<void>) | null = null;
 
   constructor() {
-    if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
+    // Robustly parse Service Account credentials from JSON or individual keys
+    const rawKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || '';
+    if (rawKey.trim().startsWith('{') || rawKey.includes('"private_key"')) {
       try {
-        const parsed = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
+        const parsed = JSON.parse(rawKey);
         if (parsed.client_email) this.serviceAccountEmail = parsed.client_email;
         if (parsed.private_key) this.serviceAccountPrivateKey = parsed.private_key;
+        console.log(`[GDrive] Initialized Service Account from JSON config: ${this.serviceAccountEmail}`);
       } catch (e) {
-        console.warn('[GDrive] Failed to parse GOOGLE_SERVICE_ACCOUNT_KEY JSON:', e);
+        console.warn('[GDrive] Failed to parse service account JSON:', e);
       }
+    } else if (rawKey) {
+      this.serviceAccountPrivateKey = rawKey;
+    }
+
+    if (this.serviceAccountPrivateKey.includes('\\n')) {
+      this.serviceAccountPrivateKey = this.serviceAccountPrivateKey.replace(/\\n/g, '\n');
     }
 
     // Initial synthetic baseline backup for immediate visual reference in dashboard
@@ -98,11 +105,16 @@ class GoogleDriveBackupService {
   }
 
   public getAuthMethod(): 'oauth_refresh_token' | 'service_account' | 'access_token' | 'ready_mock' {
+    // Prioritize working Service Account if private key is a valid RSA PEM
+    if (
+      this.serviceAccountEmail &&
+      this.serviceAccountPrivateKey &&
+      (this.serviceAccountPrivateKey.includes('BEGIN PRIVATE KEY') || this.serviceAccountPrivateKey.includes('BEGIN RSA PRIVATE KEY'))
+    ) {
+      return 'service_account';
+    }
     if (this.refreshToken && this.clientId && this.clientSecret) {
       return 'oauth_refresh_token';
-    }
-    if (this.serviceAccountEmail && this.serviceAccountPrivateKey) {
-      return 'service_account';
     }
     if (this.cachedAccessToken) {
       return 'access_token';
@@ -118,31 +130,32 @@ class GoogleDriveBackupService {
     let cloudConnected = false;
 
     if (method === 'oauth_refresh_token') {
-      status = 'active_auto_renew';
-      isAutoRenewing = true;
+      status = this.lastAuthError ? 'ready' : 'active_auto_renew';
+      isAutoRenewing = !this.lastAuthError;
       cloudConnected = !this.lastAuthError;
       description = this.lastAuthError
-        ? `Kredensial OAuth terdaftar, namun penukaran token ke Google mengalami kendala: ${this.lastAuthError}`
+        ? `Kredensial OAuth terdaftar, namun Google melaporkan kendala: ${this.lastAuthError}`
         : 'OAuth 2.0 dengan Refresh Token aktif. Access token diperbarui otomatis di latar belakang tanpa batas waktu 1 jam.';
     } else if (method === 'service_account') {
-      status = 'active_permanent';
-      isAutoRenewing = true;
+      status = this.lastAuthError ? 'ready' : 'active_permanent';
+      isAutoRenewing = !this.lastAuthError;
       cloudConnected = !this.lastAuthError;
       description = this.lastAuthError
-        ? `Service Account terdaftar, namun gagal otentikasi: ${this.lastAuthError}`
+        ? `Service Account terdaftar, namun penulisan ke Google Drive ditolak: ${this.lastAuthError}`
         : 'Google Cloud Service Account aktif. Otentikasi server-ke-server berjalan mandiri.';
     } else if (method === 'access_token') {
-      status = 'temporary_expiring';
+      status = this.lastAuthError ? 'ready' : 'temporary_expiring';
       isAutoRenewing = false;
       cloudConnected = !this.lastAuthError;
-      description =
-        'Access Token sementara aktif (kedaluwarsa ~1 jam). Disarankan menggunakan Refresh Token untuk produksi.';
+      description = this.lastAuthError
+        ? `Access Token tidak dapat digunakan: ${this.lastAuthError}`
+        : 'Access Token OAuth aktif. Cadangan otomatis diunggah langsung ke akun Google Drive Anda.';
     } else {
       status = 'ready';
       isAutoRenewing = false;
       cloudConnected = false;
       description =
-        'Google Drive belum terhubung. Snapshot database tersimpan aman di vault lokal server.';
+        'Google Drive belum terhubung. Snapshot database tersimpan aman di server vault lokal.';
     }
 
     const tokenAgeMinutes = Math.floor((Date.now() - this.tokenCreatedAt) / 60000);
@@ -164,6 +177,124 @@ class GoogleDriveBackupService {
       lastError: this.lastAuthError,
       cloudConnected,
     };
+  }
+
+  // Active Connection & Storage Quota Test
+  public async testDriveConnection(): Promise<{
+    success: boolean;
+    message: string;
+    details?: any;
+  }> {
+    const token = await this.getValidAccessToken();
+    if (!token) {
+      return {
+        success: false,
+        message: this.lastAuthError || 'Token Google Drive belum dikonfigurasi atau tidak valid.',
+      };
+    }
+
+    // Test 1: Check Drive About / User Profile
+    try {
+      const aboutRes = await fetch('https://www.googleapis.com/drive/v3/about?fields=user,storageQuota', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!aboutRes.ok) {
+        const errText = await aboutRes.text();
+        this.lastAuthError = `Google Drive API error (${aboutRes.status}): ${errText.slice(0, 150)}`;
+        return {
+          success: false,
+          message: this.lastAuthError,
+        };
+      }
+
+      const aboutData = (await aboutRes.json()) as any;
+      const userEmail = aboutData?.user?.emailAddress || 'User';
+
+      // Test 2: Check target folder
+      const folderInfo = await this.getOrCreateFolder(token);
+      if (!folderInfo) {
+        return {
+          success: false,
+          message: `Gagal mengakses atau membuat folder "${this.folderName}" di Google Drive.`,
+        };
+      }
+
+      // Test 3: Test write a tiny diagnostic canary file to verify actual storage quota
+      const canaryBoundary = '---canary_boundary_9876';
+      const canaryMeta = {
+        name: '.ujianpro_canary_test.json',
+        mimeType: 'application/json',
+        parents: [folderInfo.folderId],
+        description: 'Temporary canary test file to verify storage quota.',
+      };
+      const canaryBody =
+        `\r\n--${canaryBoundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
+        JSON.stringify(canaryMeta) +
+        `\r\n--${canaryBoundary}\r\nContent-Type: application/json\r\n\r\n` +
+        JSON.stringify({ test: true, timestamp: Date.now() }) +
+        `\r\n--${canaryBoundary}--`;
+
+      const canaryRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': `multipart/related; boundary=${canaryBoundary}`,
+        },
+        body: canaryBody,
+      });
+
+      if (!canaryRes.ok) {
+        const canaryErr = await canaryRes.text();
+        let parsedErr = canaryErr;
+        try {
+          const j = JSON.parse(canaryErr);
+          if (j.error?.message) parsedErr = j.error.message;
+        } catch (_) {}
+
+        if (parsedErr.includes('storage quota') || parsedErr.includes('storageQuotaExceeded')) {
+          const friendlyMsg =
+            'Google menolak penulisan: Service Account tidak memiliki kuota penyimpanan di Google Drive pribadi biasa. Gunakan Access Token / Refresh Token akun Gmail pribadi Anda (tersedia kuota 15 GB).';
+          this.lastAuthError = friendlyMsg;
+          return {
+            success: false,
+            message: friendlyMsg,
+          };
+        }
+
+        this.lastAuthError = `Gagal menguji penulisan ke Google Drive (${canaryRes.status}): ${parsedErr}`;
+        return {
+          success: false,
+          message: this.lastAuthError,
+        };
+      }
+
+      // Clean up canary file
+      const canaryData = (await canaryRes.json()) as { id: string };
+      if (canaryData?.id) {
+        fetch(`https://www.googleapis.com/drive/v3/files/${canaryData.id}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch(() => {});
+      }
+
+      this.lastAuthError = null;
+      return {
+        success: true,
+        message: `Koneksi ke Google Drive aktif dan terverifikasi untuk akun ${userEmail}! Kuota penulisan valid dan folder "${this.folderName}" siap menerima cadangan database.`,
+        details: {
+          userEmail,
+          folderId: folderInfo.folderId,
+          folderLink: folderInfo.folderLink,
+        },
+      };
+    } catch (err: any) {
+      this.lastAuthError = `Koneksi Google Drive gagal: ${err.message}`;
+      return {
+        success: false,
+        message: this.lastAuthError,
+      };
+    }
   }
 
   public async updateCredentials(config: GDriveAuthConfig): Promise<{
@@ -538,7 +669,7 @@ class GoogleDriveBackupService {
         fileContent +
         closeDelimiter;
 
-      const uploadResponse = await fetch(
+      let uploadResponse = await fetch(
         'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,parents',
         {
           method: 'POST',
@@ -550,6 +681,27 @@ class GoogleDriveBackupService {
         }
       );
 
+      // If token expired (401), automatically clear cache, fetch a fresh token, and retry once
+      if (uploadResponse.status === 401) {
+        console.warn('[GDrive] Upload encountered 401 Unauthorized. Refreshing token and retrying...');
+        this.cachedAccessToken = null;
+        this.tokenExpiresAt = null;
+        const freshToken = await this.getValidAccessToken();
+        if (freshToken) {
+          uploadResponse = await fetch(
+            'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,parents',
+            {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${freshToken}`,
+                'Content-Type': `multipart/related; boundary=${boundary}`,
+              },
+              body: multipartRequestBody,
+            }
+          );
+        }
+      }
+
       if (uploadResponse.ok) {
         const uploadedData = (await uploadResponse.json()) as {
           id: string;
@@ -557,6 +709,7 @@ class GoogleDriveBackupService {
           webViewLink?: string;
         };
         console.log(`[GDrive] Successfully uploaded backup to Google Drive with ID: ${uploadedData.id}`);
+        this.lastAuthError = null;
         return {
           fileId: uploadedData.id,
           webViewLink: uploadedData.webViewLink || `https://drive.google.com/file/d/${uploadedData.id}/view`,

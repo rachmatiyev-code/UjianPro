@@ -642,6 +642,26 @@ googleDriveBackupService.registerScheduledBackupCallback(async () => {
     res.json(googleDriveBackupService.getAuthDiagnostics());
   });
 
+  app.post('/api/backup/test-connection', async (req, res) => {
+    try {
+      if (req.body && Object.keys(req.body).length > 0) {
+        // Temporarily apply configs to test
+        await googleDriveBackupService.updateCredentials(req.body);
+      }
+      const testResult = await googleDriveBackupService.testDriveConnection();
+      res.json({
+        ...testResult,
+        status: googleDriveBackupService.getAuthDiagnostics(),
+      });
+    } catch (err: any) {
+      res.status(500).json({
+        success: false,
+        message: `Uji koneksi gagal: ${err.message}`,
+        status: googleDriveBackupService.getAuthDiagnostics(),
+      });
+    }
+  });
+
   app.post('/api/backup/configure-auth', async (req, res) => {
     try {
       const result = await googleDriveBackupService.updateCredentials(req.body);

@@ -140,7 +140,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   } | null>(null);
 
   const [showGdriveAuthModal, setShowGdriveAuthModal] = useState<boolean>(false);
-  const [authConfigType, setAuthConfigType] = useState<'refresh_token' | 'service_account' | 'access_token'>('refresh_token');
+  const [authConfigType, setAuthConfigType] = useState<'refresh_token' | 'service_account' | 'access_token'>('access_token');
   const [authClientId, setAuthClientId] = useState<string>('');
   const [authClientSecret, setAuthClientSecret] = useState<string>('');
   const [authRefreshToken, setAuthRefreshToken] = useState<string>('');
@@ -148,11 +148,13 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const [authSaPrivateKey, setAuthSaPrivateKey] = useState<string>('');
   const [authSaKeyJson, setAuthSaKeyJson] = useState<string>('');
   const [authAccessToken, setAuthAccessToken] = useState<string>('');
-  const [authFolder, setAuthFolder] = useState<string>('UjianOnline_Backups');
-  const [authFolderId, setAuthFolderId] = useState<string>('');
+  const [authFolder, setAuthFolder] = useState<string>('Backup UjianPro');
+  const [authFolderId, setAuthFolderId] = useState<string>('1I00tLk5AdneGoT9FHdpzNhndWUyjOj3V');
   const [authShareEmail, setAuthShareEmail] = useState<string>('rachmatiyev@gmail.com');
   const [authIntervalHours, setAuthIntervalHours] = useState<number>(6);
   const [isSavingGdriveAuth, setIsSavingGdriveAuth] = useState<boolean>(false);
+  const [isTestingDrive, setIsTestingDrive] = useState<boolean>(false);
+  const [testDriveResult, setTestDriveResult] = useState<{ success: boolean; message: string } | null>(null);
   const [gdriveAuthFeedback, setGdriveAuthFeedback] = useState<string | null>(null);
 
   // Fetch all primary datasets filtered by dummy/real mode
@@ -748,6 +750,70 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
       });
     } finally {
       setIsSyncingGDrive(false);
+    }
+  };
+
+  // Test Active Drive Connection & Quota
+  const handleTestDriveConnection = async () => {
+    setIsTestingDrive(true);
+    setTestDriveResult(null);
+    try {
+      const payload: any = {
+        folderName: authFolder.trim() || 'Backup UjianPro',
+        folderId: authFolderId.trim() || undefined,
+        shareWithEmail: authShareEmail.trim() || undefined,
+        autoBackupIntervalHours: Number(authIntervalHours) || 6,
+      };
+
+      if (authConfigType === 'refresh_token') {
+        payload.clientId = authClientId.trim();
+        payload.clientSecret = authClientSecret.trim();
+        payload.refreshToken = authRefreshToken.trim();
+      } else if (authConfigType === 'service_account') {
+        if (authSaKeyJson.trim()) {
+          payload.serviceAccountKeyJson = authSaKeyJson.trim();
+        } else {
+          payload.serviceAccountEmail = authSaEmail.trim();
+          payload.serviceAccountPrivateKey = authSaPrivateKey.trim();
+        }
+      } else if (authConfigType === 'access_token') {
+        payload.accessToken = authAccessToken.trim();
+      }
+
+      const res = await fetch('/api/backup/test-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const contentType = res.headers.get('content-type');
+      let data: any = null;
+      if (contentType && contentType.includes('application/json')) {
+        try {
+          data = await res.json();
+        } catch (_) {}
+      }
+
+      if (res.ok && data?.success) {
+        setTestDriveResult({
+          success: true,
+          message: data.message || 'Koneksi ke Google Drive terverifikasi dan kuota penyimpanan aktif!',
+        });
+        if (data.status) setGdriveAuth(data.status);
+      } else {
+        setTestDriveResult({
+          success: false,
+          message: data?.message || 'Uji koneksi gagal. Periksa token atau kuota Google Drive Anda.',
+        });
+        if (data?.status) setGdriveAuth(data.status);
+      }
+    } catch (err: any) {
+      setTestDriveResult({
+        success: false,
+        message: `Terjadi kendala saat menguji koneksi: ${err.message}`,
+      });
+    } finally {
+      setIsTestingDrive(false);
     }
   };
 
@@ -1948,29 +2014,16 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
               <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
                   <div className="flex items-center space-x-2">
-                    <span className="text-xs font-bold text-slate-700">Metode Otentikasi Google Drive:</span>
-                    {gdriveAuth?.method === 'oauth_refresh_token' && (
+                    <span className="text-xs font-bold text-slate-700">Status Google Drive:</span>
+                    {gdriveAuth?.cloudConnected ? (
                       <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>OAuth 2.0 Refresh Token (Auto-Renew Aktif)</span>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Terhubung ke Google Drive Cloud (Auto-Sync Aktif)</span>
                       </span>
-                    )}
-                    {gdriveAuth?.method === 'service_account' && (
-                      <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>Google Service Account Key (Server-to-Server)</span>
-                      </span>
-                    )}
-                    {gdriveAuth?.method === 'access_token' && (
+                    ) : (
                       <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
                         <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-                        <span>Access Token Sementara (~1 Jam)</span>
-                      </span>
-                    )}
-                    {(!gdriveAuth || gdriveAuth?.method === 'ready_mock') && (
-                      <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-100 text-blue-800 border border-blue-300">
-                        <Cloud className="w-3.5 h-3.5 text-blue-600" />
-                        <span>Siap Dihubungkan</span>
+                        <span>Server Vault Lokal (Google Drive Belum Dihubungkan)</span>
                       </span>
                     )}
                   </div>
@@ -1979,19 +2032,21 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                     onClick={() => setShowGdriveAuthModal(true)}
                     className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold underline text-left sm:text-right"
                   >
-                    Ubah Kredensial / Refresh Token &rarr;
+                    Ubah Kredensial / Hubungkan Token &rarr;
                   </button>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-3 text-xs">
                   <div>
-                    <span className="text-slate-400 block text-[11px]">Daya Tahan Token</span>
+                    <span className="text-slate-400 block text-[11px]">Metode Otentikasi</span>
                     <span className="font-semibold text-slate-800">
-                      {gdriveAuth?.isAutoRenewing
-                        ? 'Permanen (Auto-Renew Latar Belakang)'
+                      {gdriveAuth?.method === 'oauth_refresh_token'
+                        ? 'OAuth 2.0 (Refresh Token)'
+                        : gdriveAuth?.method === 'service_account'
+                        ? 'Service Account (GCP)'
                         : gdriveAuth?.method === 'access_token'
-                        ? 'Kedaluwarsa 3600s (Butuh Refresh Token)'
-                        : 'Siap Pakai / Terkonfigurasi'}
+                        ? 'Bearer Access Token'
+                        : 'Belum Dikonfigurasi'}
                     </span>
                   </div>
                   <div>
@@ -2004,7 +2059,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                     <span className="text-slate-400 block text-[11px]">Folder Target Google Drive</span>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <span className="font-semibold text-slate-800 font-mono">
-                        {gdriveAuth?.folder || 'UjianOnline_Backups'}
+                        {gdriveAuth?.folder || 'Backup UjianPro'}
                       </span>
                       {gdriveAuth?.folderLink && (
                         <a
@@ -2028,16 +2083,29 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                   </div>
                 </div>
 
-                {gdriveAuth?.lastError && (
-                  <div className="mt-3 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start space-x-2.5">
-                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-bold block">Status Koneksi Cloud Google Drive:</span>
-                      <span>{gdriveAuth.lastError}</span>
-                      <span className="block mt-1 text-[11px] text-amber-800">
-                        Data cadangan Anda tetap aman di Vault Server lokal dan dapat diunduh kapan saja. Klik tombol <strong>"Atur Kredensial Produksi"</strong> di atas untuk memperbarui token atau Service Account Key Anda.
-                      </span>
+                {(!gdriveAuth?.cloudConnected || gdriveAuth?.lastError) && (
+                  <div className="mt-3 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-start space-x-2.5">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-bold block text-amber-900">Perhatian: Snapshot Masih Tersimpan di Vault Lokal</span>
+                        <p className="mt-0.5 text-amber-800 leading-relaxed">
+                          {gdriveAuth?.lastError || 'Google Drive belum terhubung. Cadangan tetap aman di server vault lokal dan dapat diunduh kapan saja.'}
+                        </p>
+                        <p className="mt-1 text-[11px] text-amber-700">
+                          <strong>Solusi Cepat:</strong> Google Drive kebijakan resmi tidak memberikan kuota upload untuk Service Account robot pada akun Gmail pribadi. Gunakan <em>Access Token</em> atau <em>OAuth Token</em> akun Google Drive Anda agar cadangan langsung tersimpan di folder Drive pribadi Anda.
+                        </p>
+                      </div>
                     </div>
+                    <button
+                      onClick={() => {
+                        setAuthConfigType('access_token');
+                        setShowGdriveAuthModal(true);
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs whitespace-nowrap shadow-xs transition-colors shrink-0"
+                    >
+                      Hubungkan Token Sekarang &rarr;
+                    </button>
                   </div>
                 )}
 
