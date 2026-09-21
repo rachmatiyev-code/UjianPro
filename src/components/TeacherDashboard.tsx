@@ -149,7 +149,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const [authSaKeyJson, setAuthSaKeyJson] = useState<string>('');
   const [authAccessToken, setAuthAccessToken] = useState<string>('');
   const [authFolder, setAuthFolder] = useState<string>('Backup UjianPro');
-  const [authFolderId, setAuthFolderId] = useState<string>('1I00tLk5AdneGoT9FHdpzNhndWUyjOj3V');
+  const [authFolderId, setAuthFolderId] = useState<string>('');
   const [authShareEmail, setAuthShareEmail] = useState<string>('rachmatiyev@gmail.com');
   const [authIntervalHours, setAuthIntervalHours] = useState<number>(6);
   const [isSavingGdriveAuth, setIsSavingGdriveAuth] = useState<boolean>(false);
@@ -758,7 +758,33 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     setIsTestingDrive(true);
     setTestDriveResult(null);
     try {
+      if (authConfigType === 'access_token' && !authAccessToken.trim()) {
+        setTestDriveResult({
+          success: false,
+          message: 'Silakan salin dan tempel Access Token Google Drive Anda pada kolom di atas terlebih dahulu.',
+        });
+        setIsTestingDrive(false);
+        return;
+      }
+      if (authConfigType === 'refresh_token' && (!authRefreshToken.trim() || !authClientId.trim() || !authClientSecret.trim())) {
+        setTestDriveResult({
+          success: false,
+          message: 'Silakan lengkapi Client ID, Client Secret, dan Refresh Token terlebih dahulu.',
+        });
+        setIsTestingDrive(false);
+        return;
+      }
+      if (authConfigType === 'service_account' && !authSaKeyJson.trim() && (!authSaEmail.trim() || !authSaPrivateKey.trim())) {
+        setTestDriveResult({
+          success: false,
+          message: 'Silakan tempelkan kunci JSON Service Account atau isi Service Account Email & Private Key terlebih dahulu.',
+        });
+        setIsTestingDrive(false);
+        return;
+      }
+
       const payload: any = {
+        authType: authConfigType,
         folderName: authFolder.trim() || 'Backup UjianPro',
         folderId: authFolderId.trim() || undefined,
         shareWithEmail: authShareEmail.trim() || undefined,
@@ -823,8 +849,15 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     setIsSavingGdriveAuth(true);
     setGdriveAuthFeedback(null);
     try {
+      if (authConfigType === 'access_token' && !authAccessToken.trim()) {
+        setGdriveAuthFeedback('Silakan tempelkan Access Token terlebih dahulu.');
+        setIsSavingGdriveAuth(false);
+        return;
+      }
+
       const payload: any = {
-        folderName: authFolder.trim() || 'UjianOnline_Backups',
+        authType: authConfigType,
+        folderName: authFolder.trim() || 'Backup UjianPro',
         folderId: authFolderId.trim() || undefined,
         shareWithEmail: authShareEmail.trim() || undefined,
         autoBackupIntervalHours: Number(authIntervalHours) || 6,

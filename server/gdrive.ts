@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import type { BackupRecord } from '../src/types.js';
 
 export interface GDriveAuthConfig {
+  authType?: 'refresh_token' | 'service_account' | 'access_token';
   clientId?: string;
   clientSecret?: string;
   refreshToken?: string;
@@ -48,6 +49,9 @@ class GoogleDriveBackupService {
   private refreshToken = process.env.GOOGLE_REFRESH_TOKEN || '';
   private serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || '';
   private serviceAccountPrivateKey = '';
+
+  // Explicit Auth Method Preference ('access_token' | 'oauth_refresh_token' | 'service_account')
+  private preferredAuthMethod: 'oauth_refresh_token' | 'service_account' | 'access_token' | null = null;
 
   // Cached Bearer Access Token & Expiry
   private cachedAccessToken: string | null = null;
@@ -105,19 +109,27 @@ class GoogleDriveBackupService {
   }
 
   public getAuthMethod(): 'oauth_refresh_token' | 'service_account' | 'access_token' | 'ready_mock' {
-    // Prioritize working Service Account if private key is a valid RSA PEM
+    if (this.preferredAuthMethod === 'access_token') {
+      if (this.cachedAccessToken) return 'access_token';
+    } else if (this.preferredAuthMethod === 'oauth_refresh_token') {
+      if (this.refreshToken && this.clientId && this.clientSecret) return 'oauth_refresh_token';
+    } else if (this.preferredAuthMethod === 'service_account') {
+      if (this.serviceAccountEmail && this.serviceAccountPrivateKey) return 'service_account';
+    }
+
+    // Default auto-detection if no explicit preference is set:
+    if (this.cachedAccessToken) {
+      return 'access_token';
+    }
+    if (this.refreshToken && this.clientId && this.clientSecret) {
+      return 'oauth_refresh_token';
+    }
     if (
       this.serviceAccountEmail &&
       this.serviceAccountPrivateKey &&
       (this.serviceAccountPrivateKey.includes('BEGIN PRIVATE KEY') || this.serviceAccountPrivateKey.includes('BEGIN RSA PRIVATE KEY'))
     ) {
       return 'service_account';
-    }
-    if (this.refreshToken && this.clientId && this.clientSecret) {
-      return 'oauth_refresh_token';
-    }
-    if (this.cachedAccessToken) {
-      return 'access_token';
     }
     return 'ready_mock';
   }
@@ -185,11 +197,19 @@ class GoogleDriveBackupService {
     message: string;
     details?: any;
   }> {
+    const method = this.getAuthMethod();
+    if (method === 'ready_mock') {
+      return {
+        success: false,
+        message: 'Kredensial atau Token Google Drive belum dimasukkan. Silakan tempel Access Token akun Google Anda pada kolom di atas.',
+      };
+    }
+
     const token = await this.getValidAccessToken();
     if (!token) {
       return {
         success: false,
-        message: this.lastAuthError || 'Token Google Drive belum dikonfigurasi atau tidak valid.',
+        message: this.lastAuthError || 'Token Google Drive belum dimasukkan atau sudah kedaluwarsa. Silakan perbarui Access Token Anda.',
       };
     }
 
@@ -201,7 +221,22 @@ class GoogleDriveBackupService {
 
       if (!aboutRes.ok) {
         const errText = await aboutRes.text();
-        this.lastAuthError = `Google Drive API error (${aboutRes.status}): ${errText.slice(0, 150)}`;
+        let errMsg = errText;
+        try {
+          const j = JSON.parse(errText);
+          if (j.error?.message) errMsg = j.error.message;
+        } catch (_) {}
+
+        if (
+          aboutRes.status === 401 ||
+          errMsg.toLowerCase().includes('invalid credential') ||
+          errMsg.toLowerCase().includes('token expired')
+        ) {
+          this.lastAuthError =
+            'Access Token tidak valid atau sudah kedaluwarsa (~1 jam). Buka developers.google.com/oauthplayground, otorisasi Drive API v3 (scope drive.file), lalu salin Access Token yang baru.';
+        } else {
+          this.lastAuthError = `Google API menolak akses (Status ${aboutRes.status}): ${errMsg.slice(0, 150)}`;
+        }
         return {
           success: false,
           message: this.lastAuthError,
@@ -216,7 +251,7 @@ class GoogleDriveBackupService {
       if (!folderInfo) {
         return {
           success: false,
-          message: `Gagal mengakses atau membuat folder "${this.folderName}" di Google Drive.`,
+          message: `Gagal mengakses atau membuat folder "${this.folderName}" di Google Drive akun ${userEmail}.`,
         };
       }
 
@@ -281,7 +316,7 @@ class GoogleDriveBackupService {
       this.lastAuthError = null;
       return {
         success: true,
-        message: `Koneksi ke Google Drive aktif dan terverifikasi untuk akun ${userEmail}! Kuota penulisan valid dan folder "${this.folderName}" siap menerima cadangan database.`,
+        message: `Koneksi Google Drive Sukses! Terhubung ke akun: ${userEmail}. Kuota aktif dan folder "${this.folderName}" siap menerima cadangan database.`,
         details: {
           userEmail,
           folderId: folderInfo.folderId,
@@ -303,19 +338,37 @@ class GoogleDriveBackupService {
     status: GDriveAuthDiagnostics;
   }> {
     if (config.folderName) this.folderName = config.folderName.trim();
-    if (config.folderId) this.targetFolderId = config.folderId.trim();
+    if (config.folderId !== undefined) {
+      this.targetFolderId = config.folderId.trim() || null;
+      if (!this.targetFolderId) this.targetFolderLink = null;
+    }
     if (config.shareWithEmail) this.shareWithEmail = config.shareWithEmail.trim();
+
+    if (config.authType) {
+      if (config.authType === 'access_token') {
+        this.preferredAuthMethod = 'access_token';
+      } else if (config.authType === 'refresh_token') {
+        this.preferredAuthMethod = 'oauth_refresh_token';
+      } else if (config.authType === 'service_account') {
+        this.preferredAuthMethod = 'service_account';
+      }
+    }
+
     if (config.clientId !== undefined) this.clientId = config.clientId.trim();
     if (config.clientSecret !== undefined) this.clientSecret = config.clientSecret.trim();
     if (config.refreshToken !== undefined) this.refreshToken = config.refreshToken.trim();
     if (config.serviceAccountEmail !== undefined) this.serviceAccountEmail = config.serviceAccountEmail.trim();
     if (config.serviceAccountPrivateKey !== undefined) this.serviceAccountPrivateKey = config.serviceAccountPrivateKey.trim();
 
-    if (config.accessToken) {
-      this.cachedAccessToken = config.accessToken.trim();
-      this.tokenExpiresAt = Date.now() + 3600 * 1000;
-      this.tokenCreatedAt = Date.now();
-      this.lastAuthError = null;
+    if (config.accessToken !== undefined) {
+      const cleanToken = config.accessToken.trim();
+      if (cleanToken) {
+        this.cachedAccessToken = cleanToken;
+        this.tokenExpiresAt = Date.now() + 3600 * 1000;
+        this.tokenCreatedAt = Date.now();
+        this.preferredAuthMethod = 'access_token';
+        this.lastAuthError = null;
+      }
     }
 
     if (config.serviceAccountKeyJson) {
@@ -323,6 +376,7 @@ class GoogleDriveBackupService {
         const parsed = JSON.parse(config.serviceAccountKeyJson);
         if (parsed.client_email) this.serviceAccountEmail = parsed.client_email.trim();
         if (parsed.private_key) this.serviceAccountPrivateKey = parsed.private_key.trim();
+        this.preferredAuthMethod = 'service_account';
         this.lastAuthError = null;
       } catch (e: any) {
         this.lastAuthError = `Format JSON Service Account tidak valid: ${e.message}`;
@@ -498,6 +552,13 @@ class GoogleDriveBackupService {
 
   public async getValidAccessToken(): Promise<string | null> {
     const method = this.getAuthMethod();
+
+    if (method === 'access_token') {
+      if (this.cachedAccessToken && (!this.tokenExpiresAt || Date.now() < this.tokenExpiresAt)) {
+        return this.cachedAccessToken;
+      }
+      return this.cachedAccessToken;
+    }
 
     const isTokenValid =
       this.cachedAccessToken &&
