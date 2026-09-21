@@ -3078,45 +3078,90 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
             <div className="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-xl mb-4 text-xs font-semibold">
               <button
                 type="button"
-                onClick={() => setAuthConfigType('refresh_token')}
-                className={`py-2 px-2 rounded-lg text-center transition-all ${
-                  authConfigType === 'refresh_token'
-                    ? 'bg-white text-indigo-700 shadow-2xs font-bold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                1. Refresh Token (OAuth)
-              </button>
-              <button
-                type="button"
-                onClick={() => setAuthConfigType('service_account')}
-                className={`py-2 px-2 rounded-lg text-center transition-all ${
-                  authConfigType === 'service_account'
-                    ? 'bg-white text-indigo-700 shadow-2xs font-bold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                2. Service Account Key
-              </button>
-              <button
-                type="button"
-                onClick={() => setAuthConfigType('access_token')}
+                onClick={() => {
+                  setAuthConfigType('access_token');
+                  setTestDriveResult(null);
+                }}
                 className={`py-2 px-2 rounded-lg text-center transition-all ${
                   authConfigType === 'access_token'
                     ? 'bg-white text-indigo-700 shadow-2xs font-bold'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                3. Access Token (~1 Jam)
+                1. Access Token Akun Pribadi
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthConfigType('refresh_token');
+                  setTestDriveResult(null);
+                }}
+                className={`py-2 px-2 rounded-lg text-center transition-all ${
+                  authConfigType === 'refresh_token'
+                    ? 'bg-white text-indigo-700 shadow-2xs font-bold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                2. Refresh Token (OAuth)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthConfigType('service_account');
+                  setTestDriveResult(null);
+                }}
+                className={`py-2 px-2 rounded-lg text-center transition-all ${
+                  authConfigType === 'service_account'
+                    ? 'bg-white text-indigo-700 shadow-2xs font-bold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                3. Service Account Key
               </button>
             </div>
 
             <form onSubmit={handleSaveGDriveAuth} className="space-y-3.5 text-xs">
-              {/* Option A: Refresh Token */}
+              {/* Option A: Access Token (Personal Gmail Drive - Recommended) */}
+              {authConfigType === 'access_token' && (
+                <div className="space-y-3 p-3.5 rounded-xl bg-amber-50/50 border border-amber-200">
+                  <div className="p-3 bg-amber-100/70 rounded-xl text-amber-900 text-[11px] leading-relaxed space-y-1.5">
+                    <div className="font-bold text-amber-950 flex items-center space-x-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                      <span>Cara Cepat Menghubungkan Google Drive Pribadi (20 Detik via OAuth Playground):</span>
+                    </div>
+                    <ol className="list-decimal pl-4 space-y-1 text-slate-800">
+                      <li>Buka <a href="https://developers.google.com/oauthplayground" target="_blank" rel="noreferrer" className="text-indigo-600 underline font-semibold">developers.google.com/oauthplayground</a></li>
+                      <li>Di panel kiri, scroll dan pilih <strong>Drive API v3</strong> lalu centang <code className="bg-white/80 px-1 py-0.5 rounded font-mono text-indigo-700 text-[10px]">https://www.googleapis.com/auth/drive.file</code></li>
+                      <li>Klik tombol biru <strong>Authorize APIs</strong> &mdash; pilih akun Google Drive Anda (<span className="font-semibold text-slate-900">{authShareEmail || 'rachmatiyev@gmail.com'}</span>) yang memiliki kuota 15 GB.</li>
+                      <li>Klik tombol biru <strong>Exchange authorization code for tokens</strong>.</li>
+                      <li>Salin teks pada kotak <strong>Access token</strong> (diawali dengan <code className="bg-white/80 px-1 rounded font-mono text-indigo-700">ya29...</code>) dan tempel di bawah ini.</li>
+                    </ol>
+                  </div>
+
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">
+                      OAuth Bearer Access Token (Akun Google Pribadi)
+                    </label>
+                    <input
+                      type="password"
+                      value={authAccessToken}
+                      onChange={(e) => setAuthAccessToken(e.target.value)}
+                      placeholder="ya29.a0AcM612..."
+                      className="w-full p-2.5 rounded-xl border border-slate-300 font-mono text-[11px] bg-white text-slate-900"
+                      required={authConfigType === 'access_token'}
+                    />
+                    <span className="text-[10px] text-slate-500 mt-1 block">
+                      Token ini mengunggah file atas nama akun Google Drive Anda langsung ke folder <strong>{authFolder || 'Backup UjianPro'}</strong>.
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Option B: Refresh Token */}
               {authConfigType === 'refresh_token' && (
                 <div className="space-y-3 p-3.5 rounded-xl bg-indigo-50/50 border border-indigo-100">
                   <div className="text-[11px] text-indigo-900 font-medium">
-                    &bull; <strong>Rekomendasi Produksi:</strong> Server akan secara otomatis memperbarui access token di latar belakang sebelum kedaluwarsa, sehingga backup berjalan tanpa henti selamanya.
+                    &bull; <strong>Auto-Renew Tanpa Batas:</strong> Server akan secara otomatis memperbarui access token di latar belakang sebelum kedaluwarsa, sehingga backup berjalan tanpa henti selamanya.
                   </div>
 
                   <div>
@@ -3162,16 +3207,16 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                 </div>
               )}
 
-              {/* Option B: Service Account Key */}
+              {/* Option C: Service Account Key */}
               {authConfigType === 'service_account' && (
                 <div className="space-y-3 p-3.5 rounded-xl bg-emerald-50/50 border border-emerald-100">
-                  <div className="text-[11px] text-emerald-900 font-medium">
-                    &bull; <strong>Server-to-Server Production:</strong> Menggunakan otentikasi Google Cloud Service Account tanpa perlu login pengguna sama sekali.
+                  <div className="p-2.5 bg-amber-100/70 rounded-xl text-amber-900 text-[11px] leading-relaxed">
+                    <strong>Catatan Penting Google:</strong> Service Account tidak memiliki kuota penyimpanan untuk Google Drive pribadi (error 403 <em>storageQuotaExceeded</em>). Opsi ini khusus untuk folder yang berada di <strong>Google Workspace Shared Drive (Drive Bersama)</strong>.
                   </div>
 
                   <div>
                     <label className="font-semibold text-slate-700 block mb-1">
-                      Tempel JSON Kunci Service Account (Direkomendasikan)
+                      Tempel JSON Kunci Service Account (GCP)
                     </label>
                     <textarea
                       rows={4}
@@ -3205,29 +3250,6 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                       onChange={(e) => setAuthSaPrivateKey(e.target.value)}
                       placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
                       className="w-full p-2.5 rounded-xl border border-slate-300 font-mono text-[11px] bg-white"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Option C: Temporary Access Token */}
-              {authConfigType === 'access_token' && (
-                <div className="space-y-3 p-3.5 rounded-xl bg-amber-50/50 border border-amber-200">
-                  <div className="p-2 bg-amber-100/80 rounded-lg text-amber-900 text-[11px] leading-relaxed">
-                    <strong className="font-bold">Peringatan:</strong> Token dari OAuth Playground hanya berlaku selama 3600 detik (1 jam). Jika masa berlaku habis, backup otomatis berikutnya akan gagal kecuali diperbarui dengan Refresh Token.
-                  </div>
-
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">
-                      OAuth Playground Bearer Access Token
-                    </label>
-                    <input
-                      type="password"
-                      value={authAccessToken}
-                      onChange={(e) => setAuthAccessToken(e.target.value)}
-                      placeholder="ya29.a0AcM612..."
-                      className="w-full p-2.5 rounded-xl border border-slate-300 font-mono text-[11px] bg-white"
-                      required={authConfigType === 'access_token'}
                     />
                   </div>
                 </div>
@@ -3305,6 +3327,29 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                 </div>
               </div>
 
+              {/* Active Connection & Quota Test Result */}
+              {testDriveResult && (
+                <div
+                  className={`p-3 rounded-xl text-xs flex items-start space-x-2.5 ${
+                    testDriveResult.success
+                      ? 'bg-emerald-50 text-emerald-900 border border-emerald-300'
+                      : 'bg-rose-50 text-rose-900 border border-rose-300'
+                  }`}
+                >
+                  {testDriveResult.success ? (
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 mt-0.5" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
+                  )}
+                  <div>
+                    <span className="font-bold block">
+                      {testDriveResult.success ? 'Koneksi Terverifikasi & Kuota Siap:' : 'Hasil Uji Koneksi Google Drive:'}
+                    </span>
+                    <span className="leading-relaxed block mt-0.5">{testDriveResult.message}</span>
+                  </div>
+                </div>
+              )}
+
               {/* Feedback Message */}
               {gdriveAuthFeedback && (
                 <div
@@ -3319,25 +3364,38 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                 </div>
               )}
 
-              <div className="flex justify-end space-x-2 pt-3 border-t border-slate-100">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowGdriveAuthModal(false);
-                    setGdriveAuthFeedback(null);
-                  }}
-                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold"
+                  disabled={isTestingDrive}
+                  onClick={handleTestDriveConnection}
+                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold border border-slate-300 transition-colors flex items-center justify-center space-x-1.5 disabled:opacity-50"
                 >
-                  Batal
+                  <Cloud className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>{isTestingDrive ? 'Menguji Koneksi & Kuota...' : 'Uji Koneksi & Kuota Drive'}</span>
                 </button>
-                <button
-                  type="submit"
-                  disabled={isSavingGdriveAuth}
-                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs transition-all disabled:opacity-50 flex items-center space-x-1.5"
-                >
-                  <Key className="w-3.5 h-3.5" />
-                  <span>{isSavingGdriveAuth ? 'Menyimpan...' : 'Simpan & Aktifkan Kredensial'}</span>
-                </button>
+
+                <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowGdriveAuthModal(false);
+                      setGdriveAuthFeedback(null);
+                      setTestDriveResult(null);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingGdriveAuth}
+                    className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs transition-all disabled:opacity-50 flex items-center space-x-1.5"
+                  >
+                    <Key className="w-3.5 h-3.5" />
+                    <span>{isSavingGdriveAuth ? 'Menyimpan...' : 'Simpan & Aktifkan Kredensial'}</span>
+                  </button>
+                </div>
               </div>
             </form>
           </div>
