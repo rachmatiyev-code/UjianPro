@@ -7,15 +7,14 @@ import { googleDriveBackupService } from './server/gdrive.js';
 import { generateQuestionWithAI, gradeEssayWithAI, setGeminiApiKey, getGeminiApiStatus } from './server/gemini.js';
 import type { Question, Exam, Student, ExamResult, SOLOLevel, ExamSession } from './src/types.js';
 
-async function startServer() {
-  const app = express();
-  const PORT = 3000;
+export const app = express();
+const PORT = 3000;
 
-  app.use(express.json({ limit: '15mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '15mb' }));
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
-  // Register background automated backup callback
-  googleDriveBackupService.registerScheduledBackupCallback(async () => {
+// Register background automated backup callback
+googleDriveBackupService.registerScheduledBackupCallback(async () => {
     const state = dbRepository.getState();
     const summary = {
       questions: state.questions.length,
@@ -756,25 +755,34 @@ Tim Penguji & Kurikulum UjianPro`;
   // ==========================================
   // VITE DEV / PRODUCTION MIDDLEWARE
   // ==========================================
-  if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+  async function startServer() {
+    if (process.env.VERCEL) {
+      return;
+    }
+
+    if (process.env.NODE_ENV !== 'production') {
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: 'spa',
+      });
+      app.use(vite.middlewares);
+    } else {
+      const distPath = path.join(process.cwd(), 'dist');
+      app.use(express.static(distPath));
+      app.get('*', (req, res) => {
+        res.sendFile(path.join(distPath, 'index.html'));
+      });
+    }
+
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`[UjianPro AI] Server running smoothly at http://localhost:${PORT}`);
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[UjianPro AI] Server running smoothly at http://localhost:${PORT}`);
-  });
-}
+  if (!process.env.VERCEL) {
+    startServer().catch((err) => {
+      console.error('Failed to start UjianPro server:', err);
+    });
+  }
 
-startServer().catch((err) => {
-  console.error('Failed to start UjianPro server:', err);
-});
+  export default app;
